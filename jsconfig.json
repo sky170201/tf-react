@@ -1,0 +1,13 @@
+{
+  "vueCompilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "react/*": ["src/react/*"],
+      "shared/*": ["src/shared"],
+      "scheduler/*": ["src/scheduler/*"],
+      "react-dom/*": ["src/react-dom/*"],
+      "react-reconciler/*": ["src/react-reconciler/*"],
+      "react-dom-bindings/*": ["src/react-dom-bindings/*"],
+    }
+  }
+}
