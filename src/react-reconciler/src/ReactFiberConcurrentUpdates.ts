@@ -87,6 +87,9 @@ export function finishQueueingConcurrentUpdates(): void {
   }
 }
 
+/**
+ * setState后入队更新
+ */
 function enqueueUpdate(
   fiber: Fiber,
   queue: ConcurrentQueue | null,

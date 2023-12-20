@@ -212,6 +212,9 @@ export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
   return workInProgress;
 }
 
+/**
+ * 创建文本节点 tag = 6
+ */
 export function createFiberFromText(
   content: string,
   mode: TypeOfMode,
@@ -233,7 +236,9 @@ export function createFiberFromFragment(
   return fiber;
 }
 
-
+/**
+ * 创建元素fiber节点
+ */
 export function createFiberFromElement(
   element: any,
   mode: TypeOfMode,

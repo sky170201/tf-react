@@ -313,7 +313,6 @@ function dispatchEventsForPlugins(
   targetInst: null | Fiber,
   targetContainer: EventTarget,
 ): void {
-  console.log('123', 123)
   const nativeEventTarget = getEventTarget(nativeEvent);
   const dispatchQueue = [];
   extractEvents(
@@ -325,7 +324,6 @@ function dispatchEventsForPlugins(
     eventSystemFlags,
     targetContainer,
   );
-  console.log('dispatchQueue', dispatchQueue)
   processDispatchQueue(dispatchQueue, eventSystemFlags);
 }
 

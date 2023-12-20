@@ -112,6 +112,14 @@ export function resetTextContent(domElement: Instance): void {
   setTextContent(domElement, '');
 }
 
+export function commitTextUpdate(
+  textInstance: TextInstance,
+  oldText: string,
+  newText: string,
+): void {
+  textInstance.nodeValue = newText;
+}
+
 export function insertInContainerBefore(
   container: Container,
   child: Instance | TextInstance,
@@ -163,7 +171,6 @@ export function commitUpdate(
   newProps: Props,
   internalInstanceHandle: Object,
 ): void {
-  debugger
   // Diff and update the properties.
   updateProperties(domElement, type, oldProps, newProps);
 

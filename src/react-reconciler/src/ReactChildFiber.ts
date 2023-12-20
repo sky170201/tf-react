@@ -217,6 +217,9 @@ function createChildReconciler(
     return created;
   }
   
+  /**
+   * 创建fiber节点
+   */
   function createChild(
     returnFiber: Fiber,
     newChild: any,
@@ -492,6 +495,10 @@ function createChildReconciler(
     return null;
   }
   
+  /**
+   * 将数组子节点转成fiber结构
+   * ['div', 1] => [{divFiber}, {1Fiber}]
+   */
   function reconcileChildrenArray(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
@@ -774,7 +781,6 @@ function createChildReconciler(
     if (isUnkeyedTopLevelFragment) {
       newChild = newChild.props.children;
     }
-
     // Handle object types
     if (typeof newChild === 'object' && newChild !== null) {
       switch (newChild.$$typeof) {

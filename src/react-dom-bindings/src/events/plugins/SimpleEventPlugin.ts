@@ -22,9 +22,7 @@ function extractEvents(
   eventSystemFlags,
   targetContainer: EventTarget,
 ): void {
-  console.log('domEventName', domEventName)
   const reactName = topLevelEventsToReactNames.get(domEventName);
-  console.log('reactName', reactName)
   if (reactName === undefined) {
     return;
   }

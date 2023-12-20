@@ -1,4 +1,3 @@
-import { Container } from "react-dom";
 import { RootTag } from "./ReactRootTags";
 import {
   NoLane,
@@ -9,6 +8,7 @@ import {
 } from './ReactFiberLane';
 import {createHostRootFiber} from './ReactFiber';
 import {initializeUpdateQueue} from './ReactFiberClassUpdateQueue';
+import { Container } from "index";
 
 
 function FiberRootNode(

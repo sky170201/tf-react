@@ -22,7 +22,6 @@ export function beginWork(
   renderLanes: Lanes,
 ): Fiber | null {
   workInProgress.lanes = NoLanes;
-  console.log('workInProgress.tag', workInProgress.tag, current)
   switch (workInProgress.tag) {
     case IndeterminateComponent: // 2
       return mountIndeterminateComponent(
@@ -311,7 +310,6 @@ export function reconcileChildren(
   nextChildren: any,
   renderLanes: Lanes,
 ) {
-  debugger
   // 首次渲染
   if (current === null) {
     // If this is a fresh new component that hasn't been rendered yet, we
