@@ -23,6 +23,8 @@ import {
   DOCUMENT_FRAGMENT_NODE,
 } from './HTMLNodeType';
 import { detachDeletedInstance, precacheFiberNode, updateFiberProps } from './ReactDOMComponentTree';
+import { DefaultEventPriority, EventPriority } from 'react-reconciler/src/ReactEventPriorities';
+import { getEventPriority } from '../events/ReactDOMEventListener';
 
 export type Props = {
   autoFocus?: boolean,
@@ -252,3 +254,12 @@ function clearContainerSparingly(container: any) {
 // -------------------
 
 export const supportsMutation = true;
+
+
+export function getCurrentEventPriority(): EventPriority {
+  const currentEvent = window.event;
+  if (currentEvent === undefined) {
+    return DefaultEventPriority;
+  }
+  return getEventPriority(currentEvent.type as any);
+}

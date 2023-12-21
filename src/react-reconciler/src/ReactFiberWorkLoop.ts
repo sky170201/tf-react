@@ -1,5 +1,5 @@
 
-import { Lane, Lanes, NoLane, NoLanes } from "./ReactFiberLane";
+import { Lane, Lanes, NoLane, NoLanes, SyncLane } from "./ReactFiberLane";
 import { Fiber } from "./ReactInternalTypes";
 import { createWorkInProgress } from './ReactFiber'
 import {
@@ -16,6 +16,9 @@ import {
   commitMutationEffects,
 } from './ReactFiberCommitWork';
 import { finishQueueingConcurrentUpdates } from "./ReactFiberConcurrentUpdates";
+import { ConcurrentMode, NoMode } from "./ReactTypeOfMode";
+import { getCurrentUpdatePriority } from "./ReactEventPriorities";
+import { getCurrentEventPriority } from "react-dom-bindings/src/client/ReactFiberConfigDOM";
 
 type ExecutionContext = number;
 
@@ -23,6 +26,10 @@ const RootInProgress = 0;
 const RootCompleted = 5;
 
 export const NoContext = /*             */ 0b000;
+const BatchedContext = /*               */ 0b001;
+export const RenderContext = /*         */ 0b010;
+export const CommitContext = /*         */ 0b100;
+
 // Describes where we are in the React execution stack
 let executionContext: ExecutionContext = NoContext;
 // The root we're working on
@@ -562,4 +569,63 @@ function commitRootImpl(
   // }
 
   return null;
+}
+
+export function requestUpdateLane(fiber: Fiber): Lane {
+  // Special cases
+  const mode = fiber.mode;
+  if ((mode & ConcurrentMode) === NoMode) {
+    return (SyncLane as Lane);
+  } else if (
+    (executionContext & RenderContext) !== NoContext &&
+    workInProgressRootRenderLanes !== NoLanes
+  ) {
+    // This is a render phase update. These are not officially supported. The
+    // old behavior is to give this the same "thread" (lanes) as
+    // whatever is currently rendering. So if you call `setState` on a component
+    // that happens later in the same render, it will flush. Ideally, we want to
+    // remove the special case and treat them as if they came from an
+    // interleaved event. Regardless, this pattern is not officially supported.
+    // This behavior is only a fallback. The flag only exists until we can roll
+    // out the setState warning, since existing code might accidentally rely on
+    // the current behavior.
+    // return pickArbitraryLane(workInProgressRootRenderLanes);
+  }
+
+  // const isTransition = requestCurrentTransition() !== NoTransition;
+  // if (isTransition) {
+
+  //   const actionScopeLane = peekEntangledActionLane();
+  //   return actionScopeLane !== NoLane
+  //     ? // We're inside an async action scope. Reuse the same lane.
+  //       actionScopeLane
+  //     : // We may or may not be inside an async action scope. If we are, this
+  //       // is the first update in that scope. Either way, we need to get a
+  //       // fresh transition lane.
+  //       requestTransitionLane();
+  // }
+
+  // Updates originating inside certain React methods, like flushSync, have
+  // their priority set by tracking it with a context variable.
+  //
+  // The opaque type returned by the host config is internally a lane, so we can
+  // use that directly.
+  // TODO: Move this type conversion to the event priority module.
+  const updateLane: Lane = (getCurrentUpdatePriority() as any);
+  if (updateLane !== NoLane) {
+    return updateLane;
+  }
+
+  // This update originated outside React. Ask the host environment for an
+  // appropriate priority, based on the type of event.
+  //
+  // The opaque type returned by the host config is internally a lane, so we can
+  // use that directly.
+  // TODO: Move this type conversion to the event priority module.
+  const eventLane: Lane = (getCurrentEventPriority() as any);
+  return eventLane;
+}
+
+export function getWorkInProgressRootRenderLanes(): Lanes {
+  return workInProgressRootRenderLanes;
 }

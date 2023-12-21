@@ -23,3 +23,12 @@ export function useState<S>(
   const dispatcher: any = resolveDispatcher();
   return dispatcher?.useState(initialState);
 }
+
+export function useReducer<S, I, A>(
+  reducer: (S, A) => S,
+  initialArg: I,
+  init?: (I) => S,
+): [S, Dispatch<A>] | any {
+  const dispatcher = resolveDispatcher();
+  return dispatcher?.useReducer?.(reducer, initialArg, init);
+}

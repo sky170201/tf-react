@@ -1,8 +1,8 @@
 import ReactCurrentDispatcher from "react/src/ReactCurrentDispatcher";
-import { Lane, Lanes, NoLane, NoLanes, isSubsetOfLanes } from "./ReactFiberLane";
+import { Lane, Lanes, NoLane, NoLanes, OffscreenLane, isSubsetOfLanes, removeLanes } from "./ReactFiberLane";
 import { Dispatcher, Fiber } from "./ReactInternalTypes";
 import is from 'shared/objectIs';
-import { scheduleUpdateOnFiber } from "./ReactFiberWorkLoop";
+import { getWorkInProgressRootRenderLanes, requestUpdateLane, scheduleUpdateOnFiber } from "./ReactFiberWorkLoop";
 import {
   enqueueConcurrentHookUpdate,
 } from './ReactFiberConcurrentUpdates';
@@ -59,6 +59,7 @@ export function renderWithHooks(
   workInProgress.updateQueue = null;
   workInProgress.lanes = NoLanes;
 
+  // 渲染函数式组件时，调用renderWithHooks，根据current或current.memoizedState是否为null判断是初次挂载还是更新
   ReactCurrentDispatcher.current =
     current === null || current.memoizedState === null
       ? HooksDispatcherOnMount
@@ -76,10 +77,12 @@ export function renderWithHooks(
 
 const HooksDispatcherOnMount: Dispatcher = {
   useState: mountState,
+  useReducer: mountReducer,
 };
 
 const HooksDispatcherOnUpdate: Dispatcher = {
   useState: updateState,
+  useReducer: updateReducer,
 };
 
 function basicStateReducer<S>(state: S, action): S {
@@ -157,6 +160,101 @@ function updateWorkInProgressHook(): Hook {
   return workInProgressHook;
 }
 
+function mountReducer<S, I, A>(
+  reducer: (S, A) => S,
+  initialArg: I,
+  init?: (I) => S,
+): [S, Dispatch<A>] {
+  const hook = mountWorkInProgressHook();
+  let initialState;
+  if (init !== undefined) {
+    initialState = init(initialArg);
+  } else {
+    initialState = ((initialArg as any) as S);
+  }
+  hook.memoizedState = hook.baseState = initialState;
+  const queue: UpdateQueue<S, A> = {
+    pending: null,
+    lanes: NoLanes,
+    dispatch: null,
+    lastRenderedReducer: reducer,
+    lastRenderedState: (initialState as any),
+  };
+  hook.queue = queue;
+  const dispatch: Dispatch<A> = (queue.dispatch = (dispatchReducerAction.bind(
+    null,
+    currentlyRenderingFiber,
+    queue,
+  ) as any));
+  return [hook.memoizedState, dispatch];
+}
+
+function dispatchReducerAction<S, A>(
+  fiber: Fiber,
+  queue: UpdateQueue<S, A>,
+  action: A,
+): void {
+  const lane = requestUpdateLane(fiber);
+
+  const update: Update<S, A> = {
+    lane,
+    revertLane: NoLane,
+    action,
+    hasEagerState: false,
+    eagerState: null,
+    next: (null as any),
+  };
+
+  if (isRenderPhaseUpdate(fiber)) {
+    enqueueRenderPhaseUpdate(queue, update);
+  } else {
+    const root = enqueueConcurrentHookUpdate(fiber, queue, update, lane);
+    if (root !== null) {
+      scheduleUpdateOnFiber(root, fiber, lane);
+      // entangleTransitionUpdate(root, queue, lane);
+    }
+  }
+
+}
+
+/**
+ * 是否渲染阶段的更新
+ */
+function isRenderPhaseUpdate(fiber: Fiber): boolean {
+  const alternate = fiber.alternate;
+  return (
+    fiber === currentlyRenderingFiber ||
+    (alternate !== null && alternate === currentlyRenderingFiber)
+  );
+}
+
+let didScheduleRenderPhaseUpdate: boolean = false;
+// Where an update was scheduled only during the current render pass. This
+// gets reset after each attempt.
+// TODO: Maybe there's some way to consolidate this with
+// `didScheduleRenderPhaseUpdate`. Or with `numberOfReRenders`.
+let didScheduleRenderPhaseUpdateDuringThisPass: boolean = false;
+
+function enqueueRenderPhaseUpdate<S, A>(
+  queue: UpdateQueue<S, A>,
+  update: Update<S, A>,
+): void {
+  // This is a render phase update. Stash it in a lazily-created map of
+  // queue -> linked list of updates. After this render pass, we'll restart
+  // and apply the stashed updates on top of the work-in-progress hook.
+  didScheduleRenderPhaseUpdateDuringThisPass = didScheduleRenderPhaseUpdate =
+    true;
+  const pending = queue.pending;
+  if (pending === null) {
+    // This is the first update. Create a circular list.
+    update.next = update;
+  } else {
+    update.next = pending.next;
+    pending.next = update;
+  }
+  queue.pending = update;
+}
+
 function updateReducer<S, I, A>(
   reducer: (S, A) => S,
   initialArg: I,
@@ -213,16 +311,17 @@ function updateReducerImpl<S, A>(
       // An extra OffscreenLane bit is added to updates that were made to
       // a hidden tree, so that we can distinguish them from updates that were
       // already there when the tree was hidden.
-      const updateLane = NoLane // removeLanes(update.lane, OffscreenLane);
+      const updateLane = removeLanes(update.lane, OffscreenLane);
+      console.log('update', update)
       const isHiddenUpdate = updateLane !== update.lane;
 
       // Check if this update was made while the tree was hidden. If so, then
       // it's not a "base" update and we should disregard the extra base lanes
       // that were added to renderLanes when we entered the Offscreen tree.
-      const shouldSkipUpdate = isHiddenUpdate
+      const shouldSkipUpdate = false // isHiddenUpdate
         // ? !isSubsetOfLanes(getWorkInProgressRootRenderLanes(), updateLane)
         // : !isSubsetOfLanes(renderLanes, updateLane);
-
+      console.log('shouldSkipUpdate', shouldSkipUpdate)
       if (shouldSkipUpdate) {
         // Priority is insufficient. Skip this update. If this is the first
         // skipped update, the previous update/state is the new base
@@ -436,9 +535,8 @@ function dispatchSetState<S, A>(
     next: (null as any),
   };
 
-  // if (isRenderPhaseUpdate(fiber)) {
-  if (false) {
-    // enqueueRenderPhaseUpdate(queue, update);
+  if (isRenderPhaseUpdate(fiber)) {
+    enqueueRenderPhaseUpdate(queue, update);
   } else {
     const alternate = fiber.alternate;
     if (
@@ -462,6 +560,7 @@ function dispatchSetState<S, A>(
           // 存在最新状态
           update.hasEagerState = true;
           update.eagerState = eagerState;
+          console.log('eagerState, currentState', eagerState, currentState)
           // 比较新老状态，如果相等则不更新
           if (is(eagerState, currentState)) {
             // Fast path. We can bail out without scheduling React to re-render.
