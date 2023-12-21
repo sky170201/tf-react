@@ -263,3 +263,7 @@ export function getCurrentEventPriority(): EventPriority {
   }
   return getEventPriority(currentEvent.type as any);
 }
+
+export function getPublicInstance(instance: Instance): Instance {
+  return instance;
+}

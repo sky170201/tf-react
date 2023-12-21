@@ -24,3 +24,5 @@ export const enableAsyncActions = true;
 
 // Disables children for <textarea> elements
 export const disableTextareaChildren = false;
+
+export const enableUseRefAccessWarning = false;

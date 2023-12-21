@@ -1,4 +1,4 @@
-import { enableCreateEventHandleAPI, enableFloat, enableSchedulingProfiler, enableUseEffectEventHook } from "shared/ReactFeatureFlags";
+import { enableCreateEventHandleAPI, enableFloat, enableSchedulingProfiler, enableScopeAPI, enableUseEffectEventHook } from "shared/ReactFeatureFlags";
 import { Fiber } from "./ReactInternalTypes";
 import { BeforeMutationMask, Callback, ContentReset, LayoutMask, MutationMask, NoFlags, Placement, Ref, Snapshot, Update } from "./ReactFiberFlags";
 import {
@@ -25,7 +25,7 @@ import {
   TracingMarkerComponent,
 } from './ReactWorkTags';
 import { Lanes } from "./ReactFiberLane";
-import { Instance, TextInstance, appendChild, appendChildToContainer, clearContainer, commitTextUpdate, commitUpdate, insertBefore, insertInContainerBefore, resetTextContent, supportsMutation, supportsResources, supportsSingletons } from "react-dom-bindings/src/client/ReactFiberConfigDOM";
+import { Instance, TextInstance, appendChild, appendChildToContainer, clearContainer, commitTextUpdate, commitUpdate, getPublicInstance, insertBefore, insertInContainerBefore, resetTextContent, supportsMutation, supportsResources, supportsSingletons } from "react-dom-bindings/src/client/ReactFiberConfigDOM";
 import { Container } from "index";
 import {
   NoFlags as NoHookEffect,
@@ -57,6 +57,51 @@ let shouldFireAfterActiveInstanceBlur: boolean = false;
 // Allows us to avoid traversing the return path to find the nearest Offscreen ancestor.
 let offscreenSubtreeIsHidden: boolean = false;
 let offscreenSubtreeWasHidden: boolean = false;
+
+// Capture errors so they don't interrupt mounting.
+function safelyAttachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
+  try {
+    commitAttachRef(current);
+  } catch (error) {
+    // captureCommitPhaseError(current, nearestMountedAncestor, error);
+  }
+}
+
+function commitAttachRef(finishedWork: Fiber) {
+  const ref: any = finishedWork.ref;
+  if (ref !== null) {
+    const instance = finishedWork.stateNode;
+    let instanceToUse;
+    switch (finishedWork.tag) {
+      case HostHoistable:
+      case HostSingleton:
+      case HostComponent:
+        instanceToUse = getPublicInstance(instance);
+        break;
+      default:
+        instanceToUse = instance;
+    }
+    // Moved outside to ensure DCE works with this flag
+    if (enableScopeAPI && finishedWork.tag === ScopeComponent) {
+      instanceToUse = instance;
+    }
+    if (typeof ref === 'function') {
+      if (shouldProfile(finishedWork)) {
+        try {
+          // startLayoutEffectTimer();
+          finishedWork.refCleanup = ref(instanceToUse);
+        } finally {
+          // recordLayoutEffectDuration(finishedWork);
+        }
+      } else {
+        finishedWork.refCleanup = ref(instanceToUse);
+      }
+    } else {
+      // $FlowFixMe[incompatible-use] unable to narrow type to the non-function case
+      ref.current = instanceToUse;
+    }
+  }
+}
 
 export function commitBeforeMutationEffects(
   root,
@@ -1165,7 +1210,6 @@ function commitMutationEffectsOnFiber(
   }
 }
 
-
 export function commitLayoutEffects(
   finishedWork: Fiber,
   root,
@@ -1278,7 +1322,6 @@ function commitLayoutEffectOnFiber(
         finishedWork,
         committedLanes,
       );
-
       // Renderers may schedule work to be done after host components are mounted
       // (eg DOM renderer may schedule auto-focus for inputs and form controls).
       // These effects should only be committed when components are first mounted,

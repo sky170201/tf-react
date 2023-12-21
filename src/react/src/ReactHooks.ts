@@ -32,3 +32,17 @@ export function useReducer<S, I, A>(
   const dispatcher = resolveDispatcher();
   return dispatcher?.useReducer?.(reducer, initialArg, init);
 }
+
+export function useRef<T>(initialValue?: T): {current: T} | any {
+  const dispatcher = resolveDispatcher();
+  return dispatcher?.useRef?.(initialValue);
+}
+
+export function useImperativeHandle<T>(
+  ref: {current: T | null} | ((inst: T | null) => any) | null | void,
+  create: () => T,
+  deps: Array<any> | void | null,
+): void {
+  const dispatcher = resolveDispatcher();
+  return dispatcher?.useImperativeHandle?.(ref, create, deps);
+}

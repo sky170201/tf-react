@@ -1,12 +1,12 @@
 import ReactCurrentDispatcher from "react/src/ReactCurrentDispatcher";
-import { Lane, Lanes, NoLane, NoLanes, OffscreenLane, isSubsetOfLanes, removeLanes } from "./ReactFiberLane";
+import { Lane, Lanes, NoLane, NoLanes, OffscreenLane, isSubsetOfLanes, mergeLanes, removeLanes } from "./ReactFiberLane";
 import { Dispatcher, Fiber } from "./ReactInternalTypes";
 import is from 'shared/objectIs';
 import { getWorkInProgressRootRenderLanes, requestUpdateLane, scheduleUpdateOnFiber } from "./ReactFiberWorkLoop";
 import {
   enqueueConcurrentHookUpdate,
 } from './ReactFiberConcurrentUpdates';
-import { enableAsyncActions } from "shared/ReactFeatureFlags";
+import { enableAsyncActions, enableUseRefAccessWarning } from "shared/ReactFeatureFlags";
 
 type BasicStateAction<S> = ((S) => S) | S;
 
@@ -74,16 +74,6 @@ export function renderWithHooks(
   workInProgressHook = null;
   return children;
 }
-
-const HooksDispatcherOnMount: Dispatcher = {
-  useState: mountState,
-  useReducer: mountReducer,
-};
-
-const HooksDispatcherOnUpdate: Dispatcher = {
-  useState: updateState,
-  useReducer: updateReducer,
-};
 
 function basicStateReducer<S>(state: S, action): S {
   return typeof action === 'function' ? action(state) : action;
@@ -160,6 +150,42 @@ function updateWorkInProgressHook(): Hook {
   return workInProgressHook;
 }
 
+const HooksDispatcherOnMount: Dispatcher = {
+  useState: mountState,
+  useReducer: mountReducer,
+  useRef: mountRef,
+  useImperativeHandle: mountImperativeHandle,
+};
+
+const HooksDispatcherOnUpdate: Dispatcher = {
+  useState: updateState,
+  useReducer: updateReducer,
+  useRef: updateRef,
+  useImperativeHandle: updateImperativeHandle,
+};
+
+function mountImperativeHandle() {}
+
+function updateImperativeHandle () {}
+
+function mountRef<T>(initialValue: T): { current: T } {
+  const hook = mountWorkInProgressHook();
+  if (enableUseRefAccessWarning) {
+    const ref = { current: initialValue };
+    hook.memoizedState = ref;
+    return ref;
+  } else {
+    const ref = { current: initialValue };
+    hook.memoizedState = ref;
+    return ref;
+  }
+}
+
+function updateRef<T>(initialValue: T): {current: T} {
+  const hook = updateWorkInProgressHook();
+  return hook.memoizedState;
+}
+
 function mountReducer<S, I, A>(
   reducer: (S, A) => S,
   initialArg: I,
@@ -189,6 +215,7 @@ function mountReducer<S, I, A>(
   return [hook.memoizedState, dispatch];
 }
 
+// useReducer => dispatch
 function dispatchReducerAction<S, A>(
   fiber: Fiber,
   queue: UpdateQueue<S, A>,
@@ -318,10 +345,10 @@ function updateReducerImpl<S, A>(
       // Check if this update was made while the tree was hidden. If so, then
       // it's not a "base" update and we should disregard the extra base lanes
       // that were added to renderLanes when we entered the Offscreen tree.
+      // TODO 是否需要跳过跟新：更新优先级问题
       const shouldSkipUpdate = false // isHiddenUpdate
-        // ? !isSubsetOfLanes(getWorkInProgressRootRenderLanes(), updateLane)
-        // : !isSubsetOfLanes(renderLanes, updateLane);
-      console.log('shouldSkipUpdate', shouldSkipUpdate)
+      // ? !isSubsetOfLanes(getWorkInProgressRootRenderLanes(), updateLane)
+      // : !isSubsetOfLanes(renderLanes, updateLane);
       if (shouldSkipUpdate) {
         // Priority is insufficient. Skip this update. If this is the first
         // skipped update, the previous update/state is the new base
@@ -343,10 +370,10 @@ function updateReducerImpl<S, A>(
         // Update the remaining priority in the queue.
         // TODO: Don't need to accumulate this. Instead, we can remove
         // renderLanes from the original lanes.
-        currentlyRenderingFiber.lanes = NoLane // mergeLanes(
-        //   currentlyRenderingFiber.lanes,
-        //   updateLane,
-        // );
+        currentlyRenderingFiber.lanes = mergeLanes(
+          currentlyRenderingFiber.lanes,
+          updateLane,
+        );
         // markSkippedUpdateLanes(updateLane);
       } else {
         // This update does have sufficient priority.
@@ -519,6 +546,7 @@ function mountWorkInProgressHook(): Hook {
   return workInProgressHook;
 }
 
+// useState => dispatch
 function dispatchSetState<S, A>(
   fiber: Fiber,
   queue: UpdateQueue<S, A>,
@@ -560,7 +588,6 @@ function dispatchSetState<S, A>(
           // 存在最新状态
           update.hasEagerState = true;
           update.eagerState = eagerState;
-          console.log('eagerState, currentState', eagerState, currentState)
           // 比较新老状态，如果相等则不更新
           if (is(eagerState, currentState)) {
             // Fast path. We can bail out without scheduling React to re-render.

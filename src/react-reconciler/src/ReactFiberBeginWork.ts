@@ -1,6 +1,6 @@
 import { Lanes, NoLanes } from "./ReactFiberLane";
 import { Fiber } from "./ReactInternalTypes";
-import { ClassComponent, FunctionComponent, HostComponent, HostRoot, HostText, IndeterminateComponent } from "./ReactWorkTags";
+import { ClassComponent, ForwardRef, FunctionComponent, HostComponent, HostRoot, HostText, IndeterminateComponent } from "./ReactWorkTags";
 import {
   processUpdateQueue,
 } from './ReactFiberClassUpdateQueue'
@@ -9,12 +9,14 @@ import {
   reconcileChildFibers,
   // cloneChildFibers,
 } from './ReactChildFiber';
-import { PerformedWork } from "./ReactFiberFlags";
-import { disableModulePatternComponents } from "shared/ReactFeatureFlags";
+import { PerformedWork, Ref, RefStatic } from "./ReactFiberFlags";
+import { disableModulePatternComponents, enableSchedulingProfiler } from "shared/ReactFeatureFlags";
 import {
   renderWithHooks,
 } from './ReactFiberHooks';
 import { resolveDefaultProps } from "./ReactFiberLazyComponent";
+
+let didReceiveUpdate: boolean = false;
 
 export function beginWork(
   current: Fiber | null,
@@ -52,6 +54,21 @@ export function beginWork(
     case HostText: // 6
       // 文本节点时直接返回null,没有fiber节点
       return updateHostText(current, workInProgress);
+    case ForwardRef: {
+      const type = workInProgress.type;
+      const unresolvedProps = workInProgress.pendingProps;
+      const resolvedProps =
+        workInProgress.elementType === type
+          ? unresolvedProps
+          : resolveDefaultProps(type, unresolvedProps);
+      return updateForwardRef(
+        current,
+        workInProgress,
+        type,
+        resolvedProps,
+        renderLanes,
+      );
+    }
     default:
       return null
   }
@@ -156,6 +173,51 @@ function mountIndeterminateComponent(
   }
 }
 
+function updateForwardRef(
+  current: Fiber | null,
+  workInProgress: Fiber,
+  Component: any,
+  nextProps: any,
+  renderLanes: Lanes,
+) {
+  // TODO: current can be non-null here even if the component
+  // hasn't yet mounted. This happens after the first render suspends.
+  // We'll need to figure out if this is fine or can cause issues.
+
+  const render = Component.render;
+  const ref = workInProgress.ref;
+
+  // The rest is a fork of updateFunctionComponent
+  let nextChildren;
+  let hasId;
+  // prepareToReadContext(workInProgress, renderLanes);
+  if (enableSchedulingProfiler) {
+    // markComponentRenderStarted(workInProgress);
+  }
+  nextChildren = renderWithHooks(
+    current,
+    workInProgress,
+    render,
+    nextProps,
+    ref,
+    renderLanes,
+  );
+  // hasId = checkDidRenderIdHook();
+  if (enableSchedulingProfiler) {
+    // markComponentRenderStopped();
+  }
+
+  if (current !== null && !didReceiveUpdate) {
+    // bailoutHooks(current, workInProgress, renderLanes);
+    // return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
+  }
+
+  // React DevTools reads this flag.
+  workInProgress.flags |= PerformedWork;
+  reconcileChildren(current, workInProgress, nextChildren, renderLanes);
+  return workInProgress.child;
+}
+
 function updateHostRoot(
   current: null | Fiber,
   workInProgress: Fiber,
@@ -176,6 +238,24 @@ function updateHostRoot(
   reconcileChildren(current, workInProgress, nextChildren, renderLanes);
 
   return workInProgress.child;
+}
+
+/**
+ * 标记ref副作用
+ * 1、普通元素div
+ * 2、组件
+ * 在commit阶段发现如果有ref副作用时，会给ref赋值
+ */
+function markRef(current: Fiber | null, workInProgress: Fiber) {
+  const ref = workInProgress.ref;
+  if (
+    (current === null && ref !== null) ||
+    (current !== null && current.ref !== ref)
+  ) {
+    // Schedule a Ref effect
+    workInProgress.flags |= Ref;
+    workInProgress.flags |= RefStatic;
+  }
 }
 
 function updateHostComponent(
@@ -263,7 +343,7 @@ function updateHostComponent(
   //   }
   // }
 
-  // markRef(current, workInProgress);
+  markRef(current, workInProgress);
   reconcileChildren(current, workInProgress, nextChildren, renderLanes);
   return workInProgress.child;
 }

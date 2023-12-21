@@ -179,7 +179,7 @@ export type Dispatcher = {
     init?: (I) => S,
   ): [S, Dispatch<A>],
   useContext?<T>(context: ReactContext<T>): T,
-  useRef?<T>(initialValue: T): {current: T},
+  useRef?<T>(initialValue?: T): {current: T},
   useEffect?(
     create: () => (() => void) | void,
     deps: Array<any> | void | null,

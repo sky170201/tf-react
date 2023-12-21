@@ -37,6 +37,7 @@ import {
   LegacyHiddenComponent,
   CacheComponent,
   TracingMarkerComponent,
+  WorkTag,
 } from './ReactWorkTags';
 import { Lanes, NoLanes } from "./ReactFiberLane";
 import type {ReactFragment, ReactPortal, ReactScope} from 'shared/ReactTypes';
@@ -275,15 +276,17 @@ export function createFiberFromTypeAndProps(
   mode: TypeOfMode,
   lanes: Lanes,
 ): Fiber {
+  // 创建fiber时，tag不确定是什么，先赋值为IndeterminateComponent
   let fiberTag = IndeterminateComponent;
   // The resolved type is set if we know what the final type will be. I.e. it's not lazy.
   let resolvedType = type;
+  console.log('type', type)
   if (typeof type === 'function') {
     if (shouldConstruct(type)) {
       fiberTag = ClassComponent;
     } else {
     }
-  } else if (typeof type === 'string') {
+  } else if (typeof type === 'string') { // 元素类型 => div
     // if (enableFloat && supportsResources && supportsSingletons) {
     //   const hostContext = getHostContext();
     //   fiberTag = isHostHoistableType(type, pendingProps, hostContext)

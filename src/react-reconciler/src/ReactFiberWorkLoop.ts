@@ -12,7 +12,6 @@ import { unstable_requestPaint } from "scheduler/index";
 import {
   commitBeforeMutationEffects,
   commitLayoutEffects,
-  // commitLayoutEffects,
   commitMutationEffects,
 } from './ReactFiberCommitWork';
 import { finishQueueingConcurrentUpdates } from "./ReactFiberConcurrentUpdates";
@@ -400,8 +399,8 @@ function commitRootImpl(
     // The next phase is the layout phase, where we call effects that read
     // the host tree after it's been mutated. The idiomatic use case for this is
     // layout, but class component lifecycles also fire here for legacy reasons.
+    // 给ref赋值
     commitLayoutEffects(finishedWork, root, lanes);
-
 
     // Tell Scheduler to yield at the end of the frame, so the browser has an
     // opportunity to paint.
