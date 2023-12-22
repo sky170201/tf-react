@@ -169,6 +169,11 @@ export type Fiber = {
 type BasicStateAction<S> = ((S) => S) | S;
 type Dispatch<A> = (A) => void;
 
+export type MemoCache = {
+  data: Array<Array<any>>,
+  index: number,
+};
+
 export type Dispatcher = {
   use?: <T>(Usable) => T,
   readContext?<T>(context: ReactContext<T>): T,

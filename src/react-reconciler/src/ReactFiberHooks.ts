@@ -1,16 +1,42 @@
 import ReactCurrentDispatcher from "react/src/ReactCurrentDispatcher";
 import { Lane, Lanes, NoLane, NoLanes, OffscreenLane, isSubsetOfLanes, mergeLanes, removeLanes } from "./ReactFiberLane";
-import { Dispatcher, Fiber } from "./ReactInternalTypes";
+import { Dispatcher, Fiber, MemoCache } from "./ReactInternalTypes";
 import is from 'shared/objectIs';
 import { getWorkInProgressRootRenderLanes, requestUpdateLane, scheduleUpdateOnFiber } from "./ReactFiberWorkLoop";
 import {
   enqueueConcurrentHookUpdate,
 } from './ReactFiberConcurrentUpdates';
 import { enableAsyncActions, enableUseRefAccessWarning } from "shared/ReactFeatureFlags";
+import { Flags } from "./ReactFiberFlags";
+import {
+  LayoutStatic as LayoutStaticEffect,
+  Update as UpdateEffect,
+} from './ReactFiberFlags';
+import type {HookFlags} from './ReactHookEffectTags';
+import {
+  HasEffect as HookHasEffect,
+  Layout as HookLayout,
+  Passive as HookPassive,
+  Insertion as HookInsertion,
+} from './ReactHookEffectTags';
+
+const enableUseMemoCacheHook = true
 
 type BasicStateAction<S> = ((S) => S) | S;
 
 type Dispatch<A> = (A) => void;
+
+type EffectInstance = {
+  destroy: void | (() => void),
+};
+
+export type Effect = {
+  tag: HookFlags,
+  create: () => (() => void) | void,
+  inst: EffectInstance,
+  deps: Array<any> | null,
+  next: Effect,
+};
 
 export type Update<S, A> = {
   lane: Lane,
@@ -37,6 +63,27 @@ export type Hook = {
   next: Hook | null,
 };
 
+type StoreConsistencyCheck<T> = {
+  value: T,
+  getSnapshot: () => T,
+};
+
+type EventFunctionPayload<Args, Return, F> = {
+  ref: {
+    eventFn: F,
+    impl: F,
+  },
+  nextImpl: F,
+};
+
+export type FunctionComponentUpdateQueue = {
+  lastEffect: Effect | null,
+  events: Array<EventFunctionPayload<any, any, any>> | null,
+  stores: Array<StoreConsistencyCheck<any>> | null,
+  // NOTE: optional, only set when enableUseMemoCacheHook is enabled
+  memoCache?: MemoCache | null,
+};
+
 let renderLanes: Lanes = NoLanes;
 // The work-in-progress fiber. I've named it differently to distinguish it from
 // the work-in-progress hook.
@@ -45,12 +92,30 @@ let currentlyRenderingFiber: Fiber = null as any;
 let currentHook: Hook | null = null;
 let workInProgressHook: Hook | null = null;
 
+function areHookInputsEqual(
+  nextDeps: Array<any>,
+  prevDeps: Array<any> | null,
+): boolean {
+
+  if (prevDeps === null) {
+    return false;
+  }
+
+  for (let i = 0; i < prevDeps.length && i < nextDeps.length; i++) {
+    if (is(nextDeps[i], prevDeps[i])) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
 export function renderWithHooks(
   current: Fiber | null,
   workInProgress: Fiber,
   Component: (p, arg) => any,
   props,
-  secondArg,
+  secondArg, // ref
   nextRenderLanes: Lanes,) {
   renderLanes = nextRenderLanes;
   currentlyRenderingFiber = workInProgress;
@@ -164,9 +229,174 @@ const HooksDispatcherOnUpdate: Dispatcher = {
   useImperativeHandle: updateImperativeHandle,
 };
 
-function mountImperativeHandle() {}
+function mountEffectImpl(
+  fiberFlags: Flags,
+  hookFlags: HookFlags,
+  create: () => (() => void) | void,
+  deps: Array<any> | void | null,
+): void {
+  const hook = mountWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  currentlyRenderingFiber.flags |= fiberFlags;
+  hook.memoizedState = pushEffect(
+    HookHasEffect | hookFlags,
+    create,
+    createEffectInstance(),
+    nextDeps,
+  );
+}
 
-function updateImperativeHandle () {}
+function createEffectInstance(): EffectInstance {
+  return {destroy: undefined};
+}
+
+// NOTE: defining two versions of this function to avoid size impact when this feature is disabled.
+// Previously this function was inlined, the additional `memoCache` property makes it not inlined.
+let createFunctionComponentUpdateQueue: () => FunctionComponentUpdateQueue;
+if (enableUseMemoCacheHook) {
+  createFunctionComponentUpdateQueue = () => {
+    return {
+      lastEffect: null,
+      events: null,
+      stores: null,
+      memoCache: null,
+    };
+  };
+} else {
+  createFunctionComponentUpdateQueue = () => {
+    return {
+      lastEffect: null,
+      events: null,
+      stores: null,
+    };
+  };
+}
+
+function pushEffect(
+  tag: HookFlags,
+  create: () => (() => void) | void,
+  inst: EffectInstance,
+  deps: Array<any> | null,
+): Effect {
+  const effect: Effect = {
+    tag,
+    create,
+    inst,
+    deps,
+    // Circular
+    next: (null as any),
+  };
+  let componentUpdateQueue: null | FunctionComponentUpdateQueue =
+    (currentlyRenderingFiber.updateQueue as any);
+  if (componentUpdateQueue === null) {
+    componentUpdateQueue = createFunctionComponentUpdateQueue();
+    currentlyRenderingFiber.updateQueue = (componentUpdateQueue as any);
+    componentUpdateQueue.lastEffect = effect.next = effect;
+  } else {
+    const lastEffect = componentUpdateQueue.lastEffect;
+    if (lastEffect === null) {
+      componentUpdateQueue.lastEffect = effect.next = effect;
+    } else {
+      const firstEffect = lastEffect.next;
+      lastEffect.next = effect;
+      effect.next = firstEffect;
+      componentUpdateQueue.lastEffect = effect;
+    }
+  }
+  return effect;
+}
+
+function mountImperativeHandle<T>(
+  ref: {current: T | null} | ((inst: T | null) => any) | null | void,
+  create: () => T,
+  deps: Array<any> | void | null,
+): void {
+
+  // TODO: If deps are provided, should we skip comparing the ref itself?
+  const effectDeps =
+    deps !== null && deps !== undefined ? deps.concat([ref]) : null;
+
+  let fiberFlags: Flags = UpdateEffect | LayoutStaticEffect;
+  mountEffectImpl(
+    fiberFlags,
+    HookLayout,
+    imperativeHandleEffect.bind(null, create, ref as any),
+    effectDeps,
+  );
+}
+
+function updateImperativeHandle<T>(
+  ref: {current: T | null} | ((inst: T | null) => any) | null | void,
+  create: () => T,
+  deps: Array<any> | void | null,
+): void {
+
+  // TODO: If deps are provided, should we skip comparing the ref itself?
+  const effectDeps =
+    deps !== null && deps !== undefined ? deps.concat([ref]) : null;
+
+  updateEffectImpl(
+    UpdateEffect,
+    HookLayout,
+    imperativeHandleEffect.bind(null, create, ref as any),
+    effectDeps,
+  );
+}
+
+function updateEffectImpl(
+  fiberFlags: Flags,
+  hookFlags: HookFlags,
+  create: () => (() => void) | void,
+  deps: Array<any> | void | null,
+): void {
+  const hook = updateWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  const effect: Effect = hook.memoizedState;
+  const inst = effect.inst;
+
+  // currentHook is null on initial mount when rerendering after a render phase
+  // state update or for strict mode.
+  if (currentHook !== null) {
+    if (nextDeps !== null) {
+      const prevEffect: Effect = currentHook.memoizedState;
+      const prevDeps = prevEffect.deps;
+      if (areHookInputsEqual(nextDeps, prevDeps)) {
+        hook.memoizedState = pushEffect(hookFlags, create, inst, nextDeps);
+        return;
+      }
+    }
+  }
+
+  currentlyRenderingFiber.flags |= fiberFlags;
+
+  hook.memoizedState = pushEffect(
+    HookHasEffect | hookFlags,
+    create,
+    inst,
+    nextDeps,
+  );
+}
+
+function imperativeHandleEffect<T>(
+  create: () => T,
+  ref: {current: T | null} | ((inst: T | null) => any) | null | void,
+): void | (() => void) {
+  if (typeof ref === 'function') {
+    const refCallback = ref;
+    const inst = create();
+    refCallback(inst);
+    return () => {
+      refCallback(null);
+    };
+  } else if (ref !== null && ref !== undefined) {
+    const refObject = ref;
+    const inst = create();
+    refObject.current = inst;
+    return () => {
+      refObject.current = null;
+    };
+  }
+}
 
 function mountRef<T>(initialValue: T): { current: T } {
   const hook = mountWorkInProgressHook();
@@ -510,7 +740,7 @@ function mountState<S>(
 function mountStateImpl<S>(initialState): Hook {
   const hook = mountWorkInProgressHook();
   if (typeof initialState === 'function') {
-    // $FlowFixMe[incompatible-use]: Flow doesn't like mixed types
+    // $FlowFixMe[incompatible-use]: Flow doesn't like any types
     initialState = initialState();
   }
   hook.memoizedState = hook.baseState = initialState;

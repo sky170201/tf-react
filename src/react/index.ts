@@ -4,4 +4,5 @@ export {
   useReducer,
   useRef,
   forwardRef,
+  useImperativeHandle,
 } from './src/React';

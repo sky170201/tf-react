@@ -1,16 +1,15 @@
 import { createRoot } from "react-dom/client";
-import { useState, useReducer, useRef, forwardRef } from "./react";
-import { useImperativeHandle } from "react";
+import { useState, useReducer, useRef, forwardRef, useImperativeHandle } from "./react";
 
 const Child = forwardRef((props, ref) => {
-
+const inputRef = useRef()
   useImperativeHandle(ref, () => ({
-    getName: () => 'candy'
+    focus: () => inputRef.current.focus()
   }))
   
-  console.log("child count", props, ref);
   return (
     <div>
+      <input type="text" ref={inputRef} />
       <p>child</p>
     </div>
   )
@@ -33,8 +32,8 @@ const App = () => {
   const divRef = useRef('App')
   setTimeout(() => {
     // divRef.current?.remove()
-    console.log('divRef', divRef)
-  }, 500)
+    console.log('divRef', divRef.current?.focus())
+  }, 2000)
 
   return (
     <div>
