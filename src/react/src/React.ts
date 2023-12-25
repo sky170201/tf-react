@@ -1,10 +1,11 @@
 
 import ReactSharedInternals from './ReactSharedInternalsClient';
-import { useState, useReducer, useRef, useImperativeHandle } from './ReactHooks';
+import { useState, useEffect, useReducer, useRef, useImperativeHandle } from './ReactHooks';
 import {forwardRef} from './ReactForwardRef';
 
 export {
   useState,
+  useEffect,
   useReducer,
   useRef,
   forwardRef,

@@ -10,6 +10,8 @@ import { enableAsyncActions, enableUseRefAccessWarning } from "shared/ReactFeatu
 import { Flags } from "./ReactFiberFlags";
 import {
   LayoutStatic as LayoutStaticEffect,
+  Passive as PassiveEffect,
+  PassiveStatic as PassiveStaticEffect,
   Update as UpdateEffect,
 } from './ReactFiberFlags';
 import type {HookFlags} from './ReactHookEffectTags';
@@ -217,6 +219,7 @@ function updateWorkInProgressHook(): Hook {
 
 const HooksDispatcherOnMount: Dispatcher = {
   useState: mountState,
+  useEffect: mountEffect,
   useReducer: mountReducer,
   useRef: mountRef,
   useImperativeHandle: mountImperativeHandle,
@@ -224,10 +227,30 @@ const HooksDispatcherOnMount: Dispatcher = {
 
 const HooksDispatcherOnUpdate: Dispatcher = {
   useState: updateState,
+  useEffect: updateEffect,
   useReducer: updateReducer,
   useRef: updateRef,
   useImperativeHandle: updateImperativeHandle,
 };
+
+function mountEffect(
+  create: () => (() => void) | void,
+  deps: Array<any> | void | null,
+): void {
+  mountEffectImpl(
+    PassiveEffect | PassiveStaticEffect,
+    HookPassive,
+    create,
+    deps,
+  );
+}
+
+function updateEffect(
+  create: () => (() => void) | void,
+  deps: Array<any> | void | null,
+): void {
+  updateEffectImpl(PassiveEffect, HookPassive, create, deps);
+}
 
 function mountEffectImpl(
   fiberFlags: Flags,
@@ -289,6 +312,7 @@ function pushEffect(
   let componentUpdateQueue: null | FunctionComponentUpdateQueue =
     (currentlyRenderingFiber.updateQueue as any);
   if (componentUpdateQueue === null) {
+    // 创建函数组件的更新队列
     componentUpdateQueue = createFunctionComponentUpdateQueue();
     currentlyRenderingFiber.updateQueue = (componentUpdateQueue as any);
     componentUpdateQueue.lastEffect = effect.next = effect;
@@ -297,6 +321,7 @@ function pushEffect(
     if (lastEffect === null) {
       componentUpdateQueue.lastEffect = effect.next = effect;
     } else {
+      // 构建循环链表
       const firstEffect = lastEffect.next;
       lastEffect.next = effect;
       effect.next = firstEffect;
@@ -569,7 +594,6 @@ function updateReducerImpl<S, A>(
       // a hidden tree, so that we can distinguish them from updates that were
       // already there when the tree was hidden.
       const updateLane = removeLanes(update.lane, OffscreenLane);
-      console.log('update', update)
       const isHiddenUpdate = updateLane !== update.lane;
 
       // Check if this update was made while the tree was hidden. If so, then

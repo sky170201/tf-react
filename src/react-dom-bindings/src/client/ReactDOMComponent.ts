@@ -894,7 +894,7 @@ export function updateProperties(
       // Update the wrapper around inputs *after* updating props. This has to
       // happen after updating the rest of props. Otherwise HTML5 input validations
       // raise warnings and prevent the new value from being assigned.
-      console.error('unpdateInput未实现')
+      // TODO: console.error('unpdateInput未实现')
       // updateInput(
       //   domElement,
       //   value,

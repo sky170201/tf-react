@@ -24,6 +24,14 @@ export function useState<S>(
   return dispatcher?.useState(initialState);
 }
 
+export function useEffect(
+  create: () => (() => void) | void,
+  deps: Array<any> | void | null,
+): void {
+  const dispatcher = resolveDispatcher();
+  return dispatcher?.useEffect?.(create, deps);
+}
+
 export function useReducer<S, I, A>(
   reducer: (S, A) => S,
   initialArg: I,

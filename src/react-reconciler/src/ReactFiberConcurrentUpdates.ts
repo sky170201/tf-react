@@ -115,6 +115,10 @@ function enqueueUpdate(
   }
 }
 
+export function getConcurrentlyUpdatedLanes(): Lanes {
+  return concurrentlyUpdatedLanes;
+}
+
 export function enqueueConcurrentHookUpdate<S, A>(
   fiber: Fiber,
   queue: HookQueue<S, A>,
