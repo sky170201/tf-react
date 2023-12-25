@@ -631,6 +631,7 @@ function commitRootImpl(
   // Always call this before exiting `commitRoot`, to ensure that any
   // additional work on this root is scheduled.
   // TODO 为什么这里要继续调度？
+  // 答：开启新的调度，因为useEffect会在下一次调度时执行回调
   ensureRootIsScheduled(root);
 
   // if (recoverableErrors !== null) {

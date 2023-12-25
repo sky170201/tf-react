@@ -32,6 +32,14 @@ export function useEffect(
   return dispatcher?.useEffect?.(create, deps);
 }
 
+export function useLayoutEffect(
+  create: () => (() => void) | void,
+  deps: Array<any> | void | null,
+): void {
+  const dispatcher = resolveDispatcher();
+  return dispatcher?.useLayoutEffect?.(create, deps);
+}
+
 export function useReducer<S, I, A>(
   reducer: (S, A) => S,
   initialArg: I,
@@ -53,4 +61,20 @@ export function useImperativeHandle<T>(
 ): void {
   const dispatcher = resolveDispatcher();
   return dispatcher?.useImperativeHandle?.(ref, create, deps);
+}
+
+export function useCallback<T>(
+  callback: T,
+  deps: Array<any> | void | null,
+): T | any {
+  const dispatcher = resolveDispatcher();
+  return dispatcher?.useCallback?.(callback, deps);
+}
+
+export function useMemo<T>(
+  create: () => T,
+  deps: Array<any> | void | null,
+): T | any {
+  const dispatcher = resolveDispatcher();
+  return dispatcher?.useMemo?.(create, deps);
 }

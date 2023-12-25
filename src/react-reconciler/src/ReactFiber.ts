@@ -381,11 +381,19 @@ export function createFiberFromTypeAndProps(
       }
     }
   }
-
+  // 根据$$typeof确认tag
   const fiber = createFiber(fiberTag, pendingProps, key, mode);
   fiber.elementType = type;
   fiber.type = resolvedType;
   fiber.lanes = lanes;
 
   return fiber;
+}
+
+export function isSimpleFunctionComponent(type: any): boolean {
+  return (
+    typeof type === 'function' &&
+    !shouldConstruct(type) &&
+    type.defaultProps === undefined
+  );
 }

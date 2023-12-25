@@ -1256,6 +1256,8 @@ function commitLayoutEffectOnFiber(
         finishedWork,
         committedLanes,
       );
+      // useLayoutEffect视图渲染后会同步执行HookLayout | HookHasEffect
+      // useEffect需要下次调度时才会执行
       if (flags & Update) {
         commitHookLayoutEffects(finishedWork, HookLayout | HookHasEffect);
       }

@@ -59,3 +59,18 @@
 
 - 2023年12月25日14:24:54
   - 1. useEffect
+  ```
+  useEffect的flag标记为PassiveEffect，会在下一个调度时执行useEffect的回调，ensureRootIsScheduled(root)
+  ```
+  - 2. useLayoutEffect
+  ```
+  给useLayoutEffect的flag标记为Update副作用，在commitLayoutEffects->commitHookLayoutEffects时会执行这个副作用
+  if (flags & Update) {
+    commitHookLayoutEffects(finishedWork, HookLayout | HookHasEffect);
+  }
+
+  两者的区别：useEffect在commit后会在下次调度时执行，而useLayoutEffect是渲染视图后同步执行
+  ```
+  - 3. useMemo/useCallback/memo
+
+  

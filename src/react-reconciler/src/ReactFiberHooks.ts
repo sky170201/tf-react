@@ -220,7 +220,10 @@ function updateWorkInProgressHook(): Hook {
 const HooksDispatcherOnMount: Dispatcher = {
   useState: mountState,
   useEffect: mountEffect,
+  useLayoutEffect: mountLayoutEffect,
   useReducer: mountReducer,
+  useMemo: mountMemo,
+  useCallback: mountCallback,
   useRef: mountRef,
   useImperativeHandle: mountImperativeHandle,
 };
@@ -228,15 +231,86 @@ const HooksDispatcherOnMount: Dispatcher = {
 const HooksDispatcherOnUpdate: Dispatcher = {
   useState: updateState,
   useEffect: updateEffect,
+  useLayoutEffect: updateLayoutEffect,
   useReducer: updateReducer,
+  useMemo: updateMemo,
+  useCallback: updateCallback,
   useRef: updateRef,
   useImperativeHandle: updateImperativeHandle,
 };
+
+function mountCallback<T>(callback: T, deps: Array<any> | void | null): T {
+  const hook = mountWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  hook.memoizedState = [callback, nextDeps];
+  return callback;
+}
+
+function updateCallback<T>(callback: T, deps: Array<any> | void | null): T {
+  const hook = updateWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  const prevState = hook.memoizedState;
+  if (nextDeps !== null) {
+    const prevDeps: Array<any> | null = prevState[1];
+    if (areHookInputsEqual(nextDeps, prevDeps)) {
+      return prevState[0];
+    }
+  }
+  hook.memoizedState = [callback, nextDeps];
+  return callback;
+}
+
+function mountMemo<T>(
+  nextCreate: () => T,
+  deps: Array<any> | void | null,
+): T {
+  const hook = mountWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  const nextValue = nextCreate();
+  hook.memoizedState = [nextValue, nextDeps];
+  return nextValue;
+}
+
+function updateMemo<T>(
+  nextCreate: () => T,
+  deps: Array<any> | void | null,
+): T {
+  const hook = updateWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  const prevState = hook.memoizedState;
+  // Assume these are defined. If they're not, areHookInputsEqual will warn.
+  if (nextDeps !== null) {
+    const prevDeps: Array<any> | null = prevState[1];
+    if (areHookInputsEqual(nextDeps, prevDeps)) {
+      return prevState[0];
+    }
+  }
+  const nextValue = nextCreate();
+  hook.memoizedState = [nextValue, nextDeps];
+  return nextValue;
+}
+
+function mountLayoutEffect(
+  create: () => (() => void) | void,
+  deps: Array<any> | void | null,
+): void {
+  // 给useLayoutEffect标记为Update副作用，在commitLayoutEffects时会执行这个副作用
+  let fiberFlags: Flags = UpdateEffect | LayoutStaticEffect;
+  return mountEffectImpl(fiberFlags, HookLayout, create, deps);
+}
+
+function updateLayoutEffect(
+  create: () => (() => void) | void,
+  deps: Array<any> | void | null,
+): void {
+  return updateEffectImpl(UpdateEffect, HookLayout, create, deps);
+}
 
 function mountEffect(
   create: () => (() => void) | void,
   deps: Array<any> | void | null,
 ): void {
+  // useEffect的flag标记为PassiveEffect，会在下一个调度时执行useEffect的回调
   mountEffectImpl(
     PassiveEffect | PassiveStaticEffect,
     HookPassive,
