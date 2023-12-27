@@ -880,7 +880,7 @@ function dispatchSetState<S, A>(
   queue: UpdateQueue<S, A>,
   action: A,
 ): void {
-  const lane = NoLane // requestUpdateLane(fiber);
+  const lane = requestUpdateLane(fiber);
 
   const update: Update<S, A> = {
     lane,

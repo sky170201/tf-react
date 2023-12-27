@@ -87,6 +87,15 @@ export function beginWork(
         renderLanes,
       );
     }
+    case SimpleMemoComponent: {
+      return updateSimpleMemoComponent(
+        current,
+        workInProgress,
+        workInProgress.type,
+        workInProgress.pendingProps,
+        renderLanes,
+      );
+    }
     default:
       return null
   }
@@ -411,6 +420,8 @@ function updateMemoComponent(
 ): null | Fiber {
   if (current === null) {
     const type = Component.type;
+    // 优化？TODO
+    // 如果Memo包裹的是简单的函数式组件，标记为SimpleMemoComponent
     if (
       isSimpleFunctionComponent(type) &&
       Component.compare === null &&

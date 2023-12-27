@@ -38,9 +38,8 @@ const Child = forwardRef((props, ref) => {
 
 const MemoChild: any = memo(() => {
   console.log("MemoChild render");
-  return <div>memoChild</div>;
+  return <div>memoChild </div>;
 });
-console.log("MemoChild", MemoChild);
 const reducer = (state, action) => {
   switch (action.type) {
     case "add":
@@ -53,33 +52,16 @@ const reducer = (state, action) => {
 
 const App = () => {
   const [count, setCount] = useState(1);
-  const [count2, dispatch] = useReducer(reducer, 2);
+  console.log("App render");
+  useEffect(() => {
+    console.log("useEffect");
+  }, []);
 
-  // const appRef = useRef()
-  // const divRef = useRef('App')
-  // useEffect(() => {
-  //   const timer = setTimeout(() => {
-  //     setCount(count + 1)
-  //   }, 1000)
-  //   // divRef.current?.remove()
-  //   console.log('App create')
-  //   // divRef.current?.focus()
-  //   return () => {
-  //     clearTimeout(timer)
-  //     console.log('App destory')
-  //   }
-  // }, [count])
-
-  // useEffect(() => {
-  //   setCount(80)
-  // }, [])
-
-  // useLayoutEffect(() => {
-  //   console.log('useLayoutEffect')
-  //   // setCount(80)
-  // }, [])
+  useLayoutEffect(() => {
+    console.log("useLayoutEffect");
+  }, []);
   const newCount = useMemo(() => {
-    return count * 3;
+    count * 3;
   }, [count]);
 
   const getName = useCallback(() => {
@@ -88,23 +70,18 @@ const App = () => {
 
   return (
     <div>
-      {/* <div style={{width: 80, height: 80, backgroundColor: 'rebeccapurple', transform: `translateX(${count}px)`,}}></div> */}
-      {/* <div>{count}</div> */}
-      <div
-        style={{ margin: 30, backgroundColor: "Highlight" }}
-        onClick={() => dispatch({ type: "add", payload: count2 + 3 })}
+      <div>{count}</div>
+      <button
+        onClick={() => {
+          setCount(count + 1);
+        }}
       >
-        div {count2}
-      </div>
-      {/* <div style={{margin: 30, backgroundColor: 'Highlight'}} onClick={() => setCount(count+1)}>div {count}</div>
-      <div ref={appRef}>App div元素</div>
-      <Child ref={divRef} appRef={appRef} count={count} /> */}
-      {/* <Child getName={getName} newCount={newCount} /> */}
+        add
+      </button>
       <MemoChild getName={getName} newCount={newCount} />
     </div>
   );
 };
-// console.log("<App/>", <App />, App());
 const root = createRoot(document.getElementById("root"));
 console.log("root", root);
 root.render(<App />);

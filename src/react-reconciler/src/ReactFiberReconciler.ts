@@ -6,7 +6,7 @@ import {
   createUpdate,
   enqueueUpdate,
 } from './ReactFiberClassUpdateQueue';
-import { scheduleUpdateOnFiber } from './ReactFiberWorkLoop'
+import { requestUpdateLane, scheduleUpdateOnFiber } from './ReactFiberWorkLoop'
 import { Container } from "index";
 
 
@@ -45,8 +45,9 @@ export function updateContainer(
   callback,
 ): Lane {
   const current = container.current;
-  // const lane = requestUpdateLane(current);
-  const lane = NoLane;
+  // 请求更新赛道，默认是32
+  const lane = requestUpdateLane(current);
+  // const lane = NoLane;
 
   if (enableSchedulingProfiler) {
     // markRenderScheduled(lane);

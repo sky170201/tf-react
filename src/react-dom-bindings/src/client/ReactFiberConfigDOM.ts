@@ -255,7 +255,9 @@ function clearContainerSparingly(container: any) {
 
 export const supportsMutation = true;
 
-
+/**
+ * 获取事件优先级window.event.type
+ */
 export function getCurrentEventPriority(): EventPriority {
   const currentEvent = window.event;
   if (currentEvent === undefined) {

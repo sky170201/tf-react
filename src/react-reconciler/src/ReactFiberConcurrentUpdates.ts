@@ -1,10 +1,11 @@
-import { Lane, Lanes, NoLane, NoLanes, mergeLanes } from "./ReactFiberLane";
+import { Lane, Lanes, NoLane, NoLanes, markHiddenUpdate, mergeLanes } from "./ReactFiberLane";
 import { Fiber } from "./ReactInternalTypes";
-import { HostRoot } from "./ReactWorkTags";
+import { HostRoot, OffscreenComponent } from "./ReactWorkTags";
 import type {
   UpdateQueue as HookQueue,
   Update as HookUpdate,
 } from './ReactFiberHooks';
+import { OffscreenInstance, OffscreenVisible } from "./ReactFiberActivityComponent";
 
 export type ConcurrentUpdate = {
   next: ConcurrentUpdate,
@@ -20,8 +21,67 @@ export function unsafe_markUpdateLaneFromFiberToRoot(
   lane: Lane,
 ) {
   const root = getRootForUpdatedFiber(sourceFiber);
-  // markUpdateLaneFromFiberToRoot(sourceFiber, null, lane);
+  markUpdateLaneFromFiberToRoot(sourceFiber, null, lane);
   return root;
+}
+
+function markUpdateLaneFromFiberToRoot(
+  sourceFiber: Fiber,
+  update: ConcurrentUpdate | null,
+  lane: Lane,
+): void {
+  // Update the source fiber's lanes
+  sourceFiber.lanes = mergeLanes(sourceFiber.lanes, lane);
+  let alternate = sourceFiber.alternate;
+  if (alternate !== null) {
+    alternate.lanes = mergeLanes(alternate.lanes, lane);
+  }
+  // Walk the parent path to the root and update the child lanes.
+  let isHidden = false;
+  let parent = sourceFiber.return;
+  let node = sourceFiber;
+  while (parent !== null) {
+    parent.childLanes = mergeLanes(parent.childLanes, lane);
+    alternate = parent.alternate;
+    if (alternate !== null) {
+      alternate.childLanes = mergeLanes(alternate.childLanes, lane);
+    }
+
+    if (parent.tag === OffscreenComponent) {
+      // Check if this offscreen boundary is currently hidden.
+      //
+      // The instance may be null if the Offscreen parent was unmounted. Usually
+      // the parent wouldn't be reachable in that case because we disconnect
+      // fibers from the tree when they are deleted. However, there's a weird
+      // edge case where setState is called on a fiber that was interrupted
+      // before it ever mounted. Because it never mounts, it also never gets
+      // deleted. Because it never gets deleted, its return pointer never gets
+      // disconnected. Which means it may be attached to a deleted Offscreen
+      // parent node. (This discovery suggests it may be better for memory usage
+      // if we don't attach the `return` pointer until the commit phase, though
+      // in order to do that we'd need some other way to track the return
+      // pointer during the initial render, like on the stack.)
+      //
+      // This case is always accompanied by a warning, but we still need to
+      // account for it. (There may be other cases that we haven't discovered,
+      // too.)
+      const offscreenInstance: OffscreenInstance | null = parent.stateNode;
+      if (
+        offscreenInstance !== null &&
+        !(offscreenInstance._visibility & OffscreenVisible)
+      ) {
+        isHidden = true;
+      }
+    }
+
+    node = parent;
+    parent = parent.return;
+  }
+
+  if (isHidden && update !== null && node.tag === HostRoot) {
+    const root: any = node.stateNode;
+    markHiddenUpdate(root, update, lane);
+  }
 }
 
 function getRootForUpdatedFiber(sourceFiber: Fiber) {
@@ -82,7 +142,7 @@ export function finishQueueingConcurrentUpdates(): void {
     }
 
     if (lane !== NoLane) {
-      // markUpdateLaneFromFiberToRoot(fiber, update, lane);
+      markUpdateLaneFromFiberToRoot(fiber, update, lane);
     }
   }
 }

@@ -1,5 +1,5 @@
 
-import { Lane, Lanes, NoLane, NoLanes, SyncLane, includesSyncLane, mergeLanes } from "./ReactFiberLane";
+import { IdleLane, Lane, Lanes, NoLane, NoLanes, SyncLane, getNextLanes, includesSyncLane, markRootFinished, mergeLanes } from "./ReactFiberLane";
 import { Fiber } from "./ReactInternalTypes";
 import { createWorkInProgress } from './ReactFiber'
 import {
@@ -104,6 +104,10 @@ let pendingPassiveProfilerEffects: Array<Fiber> = [];
 let pendingPassiveEffectsRemainingLanes: Lanes = NoLanes;
 let pendingPassiveTransitions: Array<any> | null = null;
 
+export function getWorkInProgressRoot(): any | null {
+  return workInProgressRoot;
+}
+
 const {
   ReactCurrentDispatcher,
   ReactCurrentCache,
@@ -137,7 +141,7 @@ export function scheduleUpdateOnFiber(
   }
 
   // Mark that the root has a pending update.
-  // markRootUpdated(root, lane);
+  markRootUpdated(root, lane);
 
   ensureRootIsScheduled(root);
   // if (
@@ -153,6 +157,27 @@ export function scheduleUpdateOnFiber(
   // resetRenderTimer();
   // flushSyncWorkOnLegacyRootsOnly();
   // }
+}
+
+export function markRootUpdated(root: any, updateLane: Lane) {
+  root.pendingLanes |= updateLane;
+
+  // If there are any suspended transitions, it's possible this new update
+  // could unblock them. Clear the suspended lanes so that we can try rendering
+  // them again.
+  //
+  // TODO: We really only need to unsuspend only lanes that are in the
+  // `subtreeLanes` of the updated fiber, or the update lanes of the return
+  // path. This would exclude suspended updates in an unrelated sibling tree,
+  // since there's no way for this update to unblock it.
+  //
+  // We don't do this if the incoming update is idle, because we never process
+  // idle updates until after all the regular updates have finished; there's no
+  // way it could unblock a transition.
+  if (updateLane !== IdleLane) {
+    root.suspendedLanes = NoLanes;
+    root.pingedLanes = NoLanes;
+  }
 }
 
 function flushPassiveEffectsImpl() {
@@ -236,7 +261,6 @@ function flushPassiveEffectsImpl() {
   //   stateNode.effectDuration = 0;
   //   stateNode.passiveEffectDuration = 0;
   // }
-
   return true;
 }
 
@@ -282,6 +306,7 @@ export function flushPassiveEffects(): boolean {
 export function performConcurrentWorkOnRoot(root) {
   const originalCallbackNode = root.callbackNode;
   const didFlushPassiveEffects = flushPassiveEffects();
+  // console.log('didFlushPassiveEffects', didFlushPassiveEffects)
   if (didFlushPassiveEffects) {
     // Something in the passive effect phase may have canceled the current task.
     // Check if the task node for this root was changed.
@@ -293,6 +318,14 @@ export function performConcurrentWorkOnRoot(root) {
     } else {
       // Current task was not canceled. Continue.
     }
+  }
+  let lanes = getNextLanes(
+    root,
+    root === workInProgressRoot ? workInProgressRootRenderLanes : NoLanes,
+  );
+  if (lanes === NoLanes) {
+    // Defensive coding. This is never expected to happen.
+    return null;
   }
   renderRootSync(root)
   const finishedWork = root.current.alternate;
@@ -469,7 +502,8 @@ function commitRootImpl(
   const concurrentlyUpdatedLanes = getConcurrentlyUpdatedLanes();
   remainingLanes = mergeLanes(remainingLanes, concurrentlyUpdatedLanes);
 
-  // markRootFinished(root, remainingLanes, spawnedLane);
+  // 提交阶段重新标记各赛道的优先级
+  markRootFinished(root, remainingLanes) //, spawnedLane);
 
   if (root === workInProgressRoot) {
     // We can reset these now that they are finished.

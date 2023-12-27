@@ -26,3 +26,5 @@ export const enableAsyncActions = true;
 export const disableTextareaChildren = false;
 
 export const enableUseRefAccessWarning = false;
+
+export const enableUnifiedSyncLane = true;

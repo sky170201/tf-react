@@ -72,7 +72,6 @@ export function createFiberRoot(
   transitionCallbacks,
   formState,
 ) {
-  // $FlowFixMe[invalid-constructor] Flow no longer supports calling new on functions
   const root = new FiberRootNode(
     containerInfo,
     tag,

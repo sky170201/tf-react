@@ -176,6 +176,7 @@ function unstable_scheduleCallback(
     // wait until the next time we yield.
     if (!isHostCallbackScheduled && !isPerformingWork) {
       isHostCallbackScheduled = true;
+      // 开始调度执行
       requestHostCallback();
     }
   }
@@ -228,7 +229,6 @@ let taskTimeoutID: any = -1;
 let isMessageLoopRunning = false;
 
 function cancelHostTimeout() {
-  // $FlowFixMe[not-a-function] nullable value
   localClearTimeout?.(taskTimeoutID);
   taskTimeoutID = -1;
 }
@@ -275,6 +275,9 @@ const performWorkUntilDeadline = () => {
   needsPaint = false;
 };
 
+/**
+ * 浏览器环境优先使用MessageChannel
+ */
 let schedulePerformWorkUntilDeadline;
 if (typeof localSetImmediate === 'function') {
   // Node.js and old IE.
@@ -303,7 +306,6 @@ if (typeof localSetImmediate === 'function') {
 } else {
   // We should only fallback here in non-browser environments.
   schedulePerformWorkUntilDeadline = () => {
-    // $FlowFixMe[not-a-function] nullable value
     localSetTimeout?.(performWorkUntilDeadline, 0);
   };
 }
@@ -331,9 +333,7 @@ function flushWork(initialTime: number) {
       } catch (error) {
         if (currentTask !== null) {
           const currentTime = getCurrentTime();
-          // $FlowFixMe[incompatible-call] found when upgrading Flow
           // markTaskErrored(currentTask, currentTime);
-          // $FlowFixMe[incompatible-use] found when upgrading Flow
           currentTask.isQueued = false;
         }
         throw error;
@@ -410,37 +410,29 @@ function workLoop(initialTime: number) {
       // This currentTask hasn't expired, and we've reached the deadline.
       break;
     }
-    // $FlowFixMe[incompatible-use] found when upgrading Flow
     const callback = currentTask.callback;
     if (typeof callback === 'function') {
-      // $FlowFixMe[incompatible-use] found when upgrading Flow
       currentTask.callback = null;
-      // $FlowFixMe[incompatible-use] found when upgrading Flow
       currentPriorityLevel = currentTask.priorityLevel;
-      // $FlowFixMe[incompatible-use] found when upgrading Flow
       const didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
       if (enableProfiling) {
-        // $FlowFixMe[incompatible-call] found when upgrading Flow
         // markTaskRun(currentTask, currentTime);
       }
+      // 开始执行performConcurrentWorkOnRoot
       const continuationCallback = callback(didUserCallbackTimeout);
       currentTime = getCurrentTime();
       if (typeof continuationCallback === 'function') {
         // If a continuation is returned, immediately yield to the main thread
         // regardless of how much time is left in the current time slice.
-        // $FlowFixMe[incompatible-use] found when upgrading Flow
         currentTask.callback = continuationCallback;
         if (enableProfiling) {
-          // $FlowFixMe[incompatible-call] found when upgrading Flow
           // markTaskYield(currentTask, currentTime);
         }
         advanceTimers(currentTime);
         return true;
       } else {
         if (enableProfiling) {
-          // $FlowFixMe[incompatible-call] found when upgrading Flow
           // markTaskCompleted(currentTask, currentTime);
-          // $FlowFixMe[incompatible-use] found when upgrading Flow
           currentTask.isQueued = false;
         }
         if (currentTask === peek(taskQueue)) {
@@ -476,7 +468,6 @@ function requestHostTimeout(
   callback: (currentTime: number) => void,
   ms: number,
 ) {
-  // $FlowFixMe[not-a-function] nullable value
   taskTimeoutID = localSetTimeout?.(() => {
     callback(getCurrentTime());
   }, ms);
@@ -486,9 +477,7 @@ function requestPaint() {
   if (
     enableIsInputPending &&
     navigator !== undefined &&
-    // $FlowFixMe[prop-missing]
     (navigator as any).scheduling !== undefined &&
-    // $FlowFixMe[incompatible-type]
     (navigator as any).scheduling.isInputPending !== undefined
   ) {
     needsPaint = true;
@@ -498,6 +487,11 @@ function requestPaint() {
 }
 
 export {
+  ImmediatePriority as unstable_ImmediatePriority,
+  UserBlockingPriority as unstable_UserBlockingPriority,
+  NormalPriority as unstable_NormalPriority,
+  IdlePriority as unstable_IdlePriority,
+  LowPriority as unstable_LowPriority,
   unstable_scheduleCallback,
   getCurrentTime as unstable_now,
   requestPaint as unstable_requestPaint,

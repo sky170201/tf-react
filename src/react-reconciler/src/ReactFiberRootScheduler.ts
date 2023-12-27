@@ -1,5 +1,8 @@
-import { Lane, Lanes, NoLane } from './ReactFiberLane';
+import { ContinuousEventPriority, DefaultEventPriority, DiscreteEventPriority, IdleEventPriority, lanesToEventPriority } from './ReactEventPriorities';
+import { Lane, Lanes, NoLane, NoLanes, getNextLanes } from './ReactFiberLane';
 import {
+  getWorkInProgressRoot,
+  getWorkInProgressRootRenderLanes,
   performConcurrentWorkOnRoot,
 } from './ReactFiberWorkLoop';
 import {
@@ -15,7 +18,6 @@ import {
 export function ensureRootIsScheduled(root): void {
     scheduleTaskForRootDuringMicrotask(root, now());
 }
-
 
 function scheduleTaskForRootDuringMicrotask(
   root,
@@ -36,12 +38,12 @@ function scheduleTaskForRootDuringMicrotask(
   // markStarvedLanesAsExpired(root, currentTime);
 
   // Determine the next lanes to work on, and their priority.
-  // const workInProgressRoot = getWorkInProgressRoot();
-  // const workInProgressRootRenderLanes = getWorkInProgressRootRenderLanes();
-  // const nextLanes = getNextLanes(
-  //   root,
-  //   root === workInProgressRoot ? workInProgressRootRenderLanes : NoLanes,
-  // );
+  const workInProgressRoot = getWorkInProgressRoot();
+  const workInProgressRootRenderLanes = getWorkInProgressRootRenderLanes();
+  const nextLanes = getNextLanes(
+    root,
+    root === workInProgressRoot ? workInProgressRootRenderLanes : NoLanes,
+  );
 
   const existingCallbackNode = root.callbackNode;
   if (
@@ -94,23 +96,24 @@ function scheduleTaskForRootDuringMicrotask(
     // }
 
     let schedulerPriorityLevel;
-    // switch (lanesToEventPriority(nextLanes)) {
-    //   case DiscreteEventPriority:
-    //     schedulerPriorityLevel = ImmediateSchedulerPriority;
-    //     break;
-    //   case ContinuousEventPriority:
-    //     schedulerPriorityLevel = UserBlockingSchedulerPriority;
-    //     break;
-    //   case DefaultEventPriority:
-    //     schedulerPriorityLevel = NormalSchedulerPriority;
-    //     break;
-    //   case IdleEventPriority:
-    //     schedulerPriorityLevel = IdleSchedulerPriority;
-    //     break;
-    //   default:
-    //     schedulerPriorityLevel = NormalSchedulerPriority;
-    //     break;
-    // }
+    switch (lanesToEventPriority(nextLanes)) {
+      case DiscreteEventPriority:
+        console.log('ImmediateSchedulerPriority', ImmediateSchedulerPriority)
+        schedulerPriorityLevel = ImmediateSchedulerPriority;
+        break;
+      case ContinuousEventPriority:
+        schedulerPriorityLevel = UserBlockingSchedulerPriority;
+        break;
+      case DefaultEventPriority:
+        schedulerPriorityLevel = NormalSchedulerPriority;
+        break;
+      case IdleEventPriority:
+        schedulerPriorityLevel = IdleSchedulerPriority;
+        break;
+      default:
+        schedulerPriorityLevel = NormalSchedulerPriority;
+        break;
+    }
 
     const newCallbackNode = scheduleCallback(
       schedulerPriorityLevel,
