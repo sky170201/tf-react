@@ -73,4 +73,13 @@
   ```
   - 3. useMemo/useCallback/memo
 
+- 2023年12月28日15:50:34
+  - 1. 处理useMemo/useCallback/memo更新问题
+  ```
+  浅比较更新前后属性，如果memo包裹的组件属性没有变化，则命中这里的优化策略
+  - updateSimpleMemoComponent
+  - shallowEqual(prevProps, nextProps)
+  - bailoutOnAlreadyFinishedWork
+  ```
+
   

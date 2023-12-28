@@ -122,6 +122,10 @@ export function removeLanes(set: Lanes, subset: Lanes | Lane): Lanes {
   return set & ~subset;
 }
 
+export function includesSomeLane(a: Lanes | Lane, b: Lanes | Lane): boolean {
+  return (a & b) !== NoLanes;
+}
+
 export function includesSyncLane(lanes: Lanes): boolean {
   return (lanes & (SyncLane | SyncHydrationLane)) !== NoLanes;
 }

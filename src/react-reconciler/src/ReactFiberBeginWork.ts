@@ -1,10 +1,11 @@
-import { Lanes, NoLanes } from "./ReactFiberLane";
+import { Lanes, NoLanes, includesSomeLane } from "./ReactFiberLane";
 import { Fiber } from "./ReactInternalTypes";
 import { ClassComponent, ForwardRef, FunctionComponent, HostComponent, HostRoot, HostText, IndeterminateComponent, MemoComponent, SimpleMemoComponent } from "./ReactWorkTags";
 import {
   processUpdateQueue,
 } from './ReactFiberClassUpdateQueue'
 import {
+  cloneChildFibers,
   mountChildFibers,
   reconcileChildFibers,
   // cloneChildFibers,
@@ -18,6 +19,7 @@ import { resolveDefaultProps } from "./ReactFiberLazyComponent";
 import { createFiberFromTypeAndProps, createWorkInProgress, isSimpleFunctionComponent } from "./ReactFiber";
 import getComponentNameFromType from "shared/getComponentNameFromType";
 import shallowEqual from "shared/shallowEqual";
+import { markSkippedUpdateLanes } from "./ReactFiberWorkLoop";
 
 let didReceiveUpdate: boolean = false;
 let didWarnAboutDefaultPropsOnFunctionComponent;
@@ -379,6 +381,7 @@ function updateHostText(current: null | Fiber, workInProgress: Fiber) {
   if (current === null) {
     // tryToClaimNextHydratableTextInstance(workInProgress);
   }
+  // 这里不做任何处理，将在提交环节处理
   // Nothing to do here. This is terminal. We'll do the completion step
   // immediately after.
   return null;
@@ -492,6 +495,47 @@ function updateMemoComponent(
   return newChild;
 }
 
+function bailoutOnAlreadyFinishedWork(
+  current: Fiber | null,
+  workInProgress: Fiber,
+  renderLanes: Lanes,
+): Fiber | null {
+  if (current !== null) {
+    // Reuse previous dependencies
+    workInProgress.dependencies = current.dependencies;
+  }
+
+  // if (enableProfilerTimer) {
+  //   // Don't update "base" render times for bailouts.
+  //   stopProfilerTimerIfRunning(workInProgress);
+  // }
+
+  markSkippedUpdateLanes(workInProgress.lanes);
+
+  // Check if the children have any pending work.
+  if (!includesSomeLane(renderLanes, workInProgress.childLanes)) {
+    // The children don't have any work either. We can skip them.
+    // TODO: Once we add back resuming, we should check if the children are
+    // a work-in-progress set. If so, we need to transfer their effects.
+
+    // if (enableLazyContextPropagation && current !== null) {
+    //   // Before bailing out, check if there are any context changes in
+    //   // the children.
+    //   lazilyPropagateParentContextChanges(current, workInProgress, renderLanes);
+    //   if (!includesSomeLane(renderLanes, workInProgress.childLanes)) {
+    //     return null;
+    //   }
+    // } else {
+    //   return null;
+    // }
+  }
+
+  // This fiber doesn't have work, but its subtree does. Clone the child
+  // fibers and continue.
+  cloneChildFibers(current, workInProgress);
+  return workInProgress.child;
+}
+
 function updateSimpleMemoComponent(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -543,11 +587,12 @@ function updateSimpleMemoComponent(
         // TODO: Move the reset at in beginWork out of the common path so that
         // this is no longer necessary.
         workInProgress.lanes = current.lanes;
-        // return bailoutOnAlreadyFinishedWork(
-        //   current,
-        //   workInProgress,
-        //   renderLanes,
-        // );
+        // TODO 浅比较更新前后属性，如果memo包裹的组件属性没有变化，则命中这里的优化策略
+        return bailoutOnAlreadyFinishedWork(
+          current,
+          workInProgress,
+          renderLanes,
+        );
       } else if ((current.flags & ForceUpdateForLegacySuspense) !== NoFlags) {
         // This is a special case that only exists for legacy mode.
         // See https://github.com/facebook/react/pull/19216.

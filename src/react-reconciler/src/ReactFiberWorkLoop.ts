@@ -387,6 +387,13 @@ function workLoopSync() {
   }
 }
 
+export function markSkippedUpdateLanes(lane: Lane | Lanes): void {
+  workInProgressRootSkippedLanes = mergeLanes(
+    lane,
+    workInProgressRootSkippedLanes,
+  );
+}
+
 function performUnitOfWork(unitOfWork: Fiber): void {
   // The current, flushed, state of this fiber is the alternate. Ideally
   // nothing should rely on this, but relying on it here means that we don't
@@ -395,6 +402,7 @@ function performUnitOfWork(unitOfWork: Fiber): void {
   // setCurrentDebugFiberInDEV(unitOfWork);
   let next = beginWork(current, unitOfWork, entangledRenderLanes);
 
+  // 给memoizedProps赋值为新的
   unitOfWork.memoizedProps = unitOfWork.pendingProps;
   if (next === null) {
     // If this doesn't spawn new work, complete the current work.
