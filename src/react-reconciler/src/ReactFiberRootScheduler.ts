@@ -16,7 +16,7 @@ import {
 } from './Scheduler';
 
 export function ensureRootIsScheduled(root): void {
-    scheduleTaskForRootDuringMicrotask(root, now());
+  scheduleTaskForRootDuringMicrotask(root, now());
 }
 
 function scheduleTaskForRootDuringMicrotask(
@@ -78,50 +78,49 @@ function scheduleTaskForRootDuringMicrotask(
   //   root.callbackNode = null;
   //   return SyncLane;
   // } else {
-    // We use the highest priority lane to represent the priority of the callback.
-    const existingCallbackPriority = root.callbackPriority;
-    // const newCallbackPriority = getHighestPriorityLane(nextLanes);
+  // We use the highest priority lane to represent the priority of the callback.
+  const existingCallbackPriority = root.callbackPriority;
+  // const newCallbackPriority = getHighestPriorityLane(nextLanes);
 
-    // if (
-    //   newCallbackPriority === existingCallbackPriority &&
-    //   // Special case related to `act`. If the currently scheduled task is a
-    //   // Scheduler task, rather than an `act` task, cancel it and re-schedule
-    //   // on the `act` queue.
-    // ) {
-    //   // The priority hasn't changed. We can reuse the existing task.
-    //   return newCallbackPriority;
-    // } else {
-    //   // Cancel the existing callback. We'll schedule a new one below.
-    //   // cancelCallback(existingCallbackNode);
-    // }
+  // if (
+  //   newCallbackPriority === existingCallbackPriority &&
+  //   // Special case related to `act`. If the currently scheduled task is a
+  //   // Scheduler task, rather than an `act` task, cancel it and re-schedule
+  //   // on the `act` queue.
+  // ) {
+  //   // The priority hasn't changed. We can reuse the existing task.
+  //   return newCallbackPriority;
+  // } else {
+  //   // Cancel the existing callback. We'll schedule a new one below.
+  //   // cancelCallback(existingCallbackNode);
+  // }
 
-    let schedulerPriorityLevel;
-    switch (lanesToEventPriority(nextLanes)) {
-      case DiscreteEventPriority:
-        console.log('ImmediateSchedulerPriority', ImmediateSchedulerPriority)
-        schedulerPriorityLevel = ImmediateSchedulerPriority;
-        break;
-      case ContinuousEventPriority:
-        schedulerPriorityLevel = UserBlockingSchedulerPriority;
-        break;
-      case DefaultEventPriority:
-        schedulerPriorityLevel = NormalSchedulerPriority;
-        break;
-      case IdleEventPriority:
-        schedulerPriorityLevel = IdleSchedulerPriority;
-        break;
-      default:
-        schedulerPriorityLevel = NormalSchedulerPriority;
-        break;
-    }
+  let schedulerPriorityLevel;
+  switch (lanesToEventPriority(nextLanes)) {
+    case DiscreteEventPriority:
+      schedulerPriorityLevel = ImmediateSchedulerPriority;
+      break;
+    case ContinuousEventPriority:
+      schedulerPriorityLevel = UserBlockingSchedulerPriority;
+      break;
+    case DefaultEventPriority:
+      schedulerPriorityLevel = NormalSchedulerPriority;
+      break;
+    case IdleEventPriority:
+      schedulerPriorityLevel = IdleSchedulerPriority;
+      break;
+    default:
+      schedulerPriorityLevel = NormalSchedulerPriority;
+      break;
+  }
 
-    const newCallbackNode = scheduleCallback(
-      schedulerPriorityLevel,
-      performConcurrentWorkOnRoot.bind(null, root),
-    );
+  const newCallbackNode = scheduleCallback(
+    schedulerPriorityLevel,
+    performConcurrentWorkOnRoot.bind(null, root),
+  );
 
-    // root.callbackPriority = newCallbackPriority;
-    root.callbackNode = newCallbackNode;
-    // return newCallbackPriority;
+  // root.callbackPriority = newCallbackPriority;
+  root.callbackNode = newCallbackNode;
+  // return newCallbackPriority;
   // }
 }

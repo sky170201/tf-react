@@ -97,7 +97,9 @@ let workInProgressRootConcurrentErrors: Array<any> | null =
 let workInProgressRootRecoverableErrors: Array<any> | null =
   null;
 
+// 此根节点上有没有useEffect类似的副作用
 let rootDoesHavePassiveEffects: boolean = false;
+// 具有useEffect类似的副作用的根节点
 let rootWithPendingPassiveEffects: any | null = null;
 let pendingPassiveEffectsLanes: Lanes = NoLanes;
 let pendingPassiveProfilerEffects: Array<Fiber> = [];
@@ -265,12 +267,14 @@ function flushPassiveEffectsImpl() {
 }
 
 export function flushPassiveEffects(): boolean {
+  console.log('执行下一个调度任务==========')
   // Returns whether passive effects were flushed.
   // TODO: Combine this check with the one in flushPassiveEFfectsImpl. We should
   // probably just combine the two functions. I believe they were only separate
   // in the first place because we used to wrap it with
   // `Scheduler.runWithPriority`, which accepts a function. But now we track the
   // priority within React itself, so we can mutate the variable directly.
+  // 在commit阶段已经赋值
   if (rootWithPendingPassiveEffects !== null) {
     // Cache the root since rootWithPendingPassiveEffects is cleared in
     // flushPassiveEffectsImpl
@@ -478,7 +482,12 @@ function commitRoot(
   return null;
 }
 
-
+/**
+ * commit的三个阶段
+ * 1、commitBeforeMutationEffects 变更前
+ * 2、commitMutationEffects 变更阶段
+ * 3、commitLayoutEffects 变更后
+ */
 function commitRootImpl(
   root,
   a = null,
@@ -489,6 +498,7 @@ function commitRootImpl(
   } while (rootWithPendingPassiveEffects !== null);
   // flushRenderPhaseStrictModeWarningsInDEV();
 
+  // finishedWork：双缓冲机制里新的根节点(一屏)
   const finishedWork = root.finishedWork;
   const lanes = root.finishedLanes;
 
@@ -528,11 +538,13 @@ function commitRootImpl(
   // might get scheduled in the commit phase. (See #16714.)
   // TODO: Delete all other places that schedule the passive effect callback
   // They're redundant.
+  // 看当前跟上有没有effect相关的副作用
   if (
     (finishedWork.subtreeFlags & PassiveMask) !== NoFlags ||
     (finishedWork.flags & PassiveMask) !== NoFlags
   ) {
     if (!rootDoesHavePassiveEffects) {
+      // 说明有effect副作用，在commit提交阶段会再处理
       rootDoesHavePassiveEffects = true;
       pendingPassiveEffectsRemainingLanes = remainingLanes;
       // workInProgressTransitions might be overwritten, so we want
@@ -542,6 +554,7 @@ function commitRootImpl(
       // the previous render and commit if we throttle the commit
       // with setTimeout
       pendingPassiveTransitions = transitions;
+      // 开启一个新的调度，执行有副作用的effect
       Scheduler_scheduleCallback(NormalSchedulerPriority, () => {
         flushPassiveEffects();
         // This render triggered passive effects: release the root cache pool
@@ -586,6 +599,7 @@ function commitRootImpl(
     // state of the host tree right before we mutate it. This is where
     // getSnapshotBeforeUpdate is called.
     // TODO
+    console.log('开始commit阶段===========')
     const shouldFireAfterActiveInstanceBlur = commitBeforeMutationEffects(
       root,
       finishedWork,
@@ -593,6 +607,7 @@ function commitRootImpl(
 
     // The next phase is the mutation phase, where we mutate the host tree.
     // 页面绘制发生在这个阶段
+    console.log('开始DOM变更===========')
     commitMutationEffects(root, finishedWork, lanes);
     const resetAfterCommit = (node) => { }
     resetAfterCommit(root.containerInfo);
@@ -601,12 +616,14 @@ function commitRootImpl(
     // the mutation phase, so that the previous tree is still current during
     // componentWillUnmount, but before the layout phase, so that the finished
     // work is current during componentDidMount/Update.
+    // DOM更新后就可以让root.current指向新的根节点
     root.current = finishedWork;
 
     // The next phase is the layout phase, where we call effects that read
     // the host tree after it's been mutated. The idiomatic use case for this is
     // layout, but class component lifecycles also fire here for legacy reasons.
-    // 给ref赋值
+    // 给ref赋值,执行useLayoutEffect
+    console.log('DOM变更后===========')
     commitLayoutEffects(finishedWork, root, lanes);
 
     // Tell Scheduler to yield at the end of the frame, so the browser has an
@@ -634,6 +651,7 @@ function commitRootImpl(
   if (rootDoesHavePassiveEffects) {
     // This commit has passive effects. Stash a reference to them. But don't
     // schedule a callback until after flushing layout work.
+    // 这个提交有effect副作用，隐藏对它们的引用。但是不要安排回调直到刷新布局工作之后
     rootDoesHavePassiveEffects = false;
     // 给rootWithPendingPassiveEffects赋值
     rootWithPendingPassiveEffects = root;
@@ -674,6 +692,7 @@ function commitRootImpl(
   // additional work on this root is scheduled.
   // TODO 为什么这里要继续调度？
   // 答：开启新的调度，因为useEffect会在下一次调度时执行回调
+  //在提交之后，因为根上可能会有跳过的更新，所以需要重新再次调度
   ensureRootIsScheduled(root);
 
   // if (recoverableErrors !== null) {

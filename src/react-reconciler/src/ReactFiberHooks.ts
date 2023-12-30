@@ -14,7 +14,7 @@ import {
   PassiveStatic as PassiveStaticEffect,
   Update as UpdateEffect,
 } from './ReactFiberFlags';
-import type {HookFlags} from './ReactHookEffectTags';
+import type { HookFlags } from './ReactHookEffectTags';
 import {
   HasEffect as HookHasEffect,
   Layout as HookLayout,
@@ -123,6 +123,7 @@ export function renderWithHooks(
   currentlyRenderingFiber = workInProgress;
 
   workInProgress.memoizedState = null;
+  // 更新之前清空更新队列
   workInProgress.updateQueue = null;
   workInProgress.lanes = NoLanes;
 
@@ -290,6 +291,9 @@ function updateMemo<T>(
   return nextValue;
 }
 
+/**
+ * DOM更新后，页面绘制前执行，会阻塞渲染
+ */
 function mountLayoutEffect(
   create: () => (() => void) | void,
   deps: Array<any> | void | null,
@@ -306,6 +310,9 @@ function updateLayoutEffect(
   return updateEffectImpl(UpdateEffect, HookLayout, create, deps);
 }
 
+/**
+ * DOM更新后，开启一个新的宏任务里执行，不会阻塞渲染
+ */
 function mountEffect(
   create: () => (() => void) | void,
   deps: Array<any> | void | null,
@@ -344,7 +351,7 @@ function mountEffectImpl(
 }
 
 function createEffectInstance(): EffectInstance {
-  return {destroy: undefined};
+  return { destroy: undefined };
 }
 
 // NOTE: defining two versions of this function to avoid size impact when this feature is disabled.
@@ -406,7 +413,7 @@ function pushEffect(
 }
 
 function mountImperativeHandle<T>(
-  ref: {current: T | null} | ((inst: T | null) => any) | null | void,
+  ref: { current: T | null } | ((inst: T | null) => any) | null | void,
   create: () => T,
   deps: Array<any> | void | null,
 ): void {
@@ -425,7 +432,7 @@ function mountImperativeHandle<T>(
 }
 
 function updateImperativeHandle<T>(
-  ref: {current: T | null} | ((inst: T | null) => any) | null | void,
+  ref: { current: T | null } | ((inst: T | null) => any) | null | void,
   create: () => T,
   deps: Array<any> | void | null,
 ): void {
@@ -457,8 +464,10 @@ function updateEffectImpl(
   // state update or for strict mode.
   if (currentHook !== null) {
     if (nextDeps !== null) {
+      // 老的effect对象
       const prevEffect: Effect = currentHook.memoizedState;
       const prevDeps = prevEffect.deps;
+      // 比较useEffect的新老依赖数组
       if (areHookInputsEqual(nextDeps, prevDeps)) {
         hook.memoizedState = pushEffect(hookFlags, create, inst, nextDeps);
         return;
@@ -478,7 +487,7 @@ function updateEffectImpl(
 
 function imperativeHandleEffect<T>(
   create: () => T,
-  ref: {current: T | null} | ((inst: T | null) => any) | null | void,
+  ref: { current: T | null } | ((inst: T | null) => any) | null | void,
 ): void | (() => void) {
   if (typeof ref === 'function') {
     const refCallback = ref;
@@ -510,7 +519,7 @@ function mountRef<T>(initialValue: T): { current: T } {
   }
 }
 
-function updateRef<T>(initialValue: T): {current: T} {
+function updateRef<T>(initialValue: T): { current: T } {
   const hook = updateWorkInProgressHook();
   return hook.memoizedState;
 }

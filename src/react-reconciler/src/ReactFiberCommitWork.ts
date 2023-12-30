@@ -62,10 +62,10 @@ function safelyAttachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
 
 function shouldProfile(current: Fiber): boolean {
   return false // (
-    // enableProfilerTimer &&
-    // enableProfilerCommitHooks &&
-    // (current.mode & ProfileMode) !== NoMode &&
-    // (getExecutionContext() & CommitContext) !== NoContext
+  // enableProfilerTimer &&
+  // enableProfilerCommitHooks &&
+  // (current.mode & ProfileMode) !== NoMode &&
+  // (getExecutionContext() & CommitContext) !== NoContext
   // );
 }
 
@@ -521,7 +521,7 @@ function getHostParentFiber(fiber: Fiber): Fiber {
 
   throw new Error(
     'Expected to find a host parent. This error is likely caused by a bug ' +
-      'in React. Please file an issue.',
+    'in React. Please file an issue.',
   );
 }
 
@@ -578,7 +578,7 @@ function insertOrAppendPlacementNode(
   before: Instance,
   parent: Instance,
 ): void {
-  const {tag} = node;
+  const { tag } = node;
   const isHost = tag === HostComponent || tag === HostText;
   if (isHost) {
     const stateNode = node.stateNode;
@@ -661,7 +661,7 @@ export function commitPlacement(finishedWork: Fiber): void {
     default:
       throw new Error(
         'Invalid host parent fiber. This error is likely caused by a bug ' +
-          'in React. Please file an issue.',
+        'in React. Please file an issue.',
       );
   }
 }
@@ -671,7 +671,7 @@ function insertOrAppendPlacementNodeIntoContainer(
   before: Instance,
   parent: Container,
 ): void {
-  const {tag} = node;
+  const { tag } = node;
   const isHost = tag === HostComponent || tag === HostText;
   if (isHost) {
     const stateNode = node.stateNode;
@@ -721,13 +721,16 @@ function commitMutationEffectsOnFiber(
     case SimpleMemoComponent: {
       recursivelyTraverseMutationEffects(root, finishedWork, lanes);
       commitReconciliationEffects(finishedWork);
+      // 执行更新的副作用，带Update标记的副作用
+      // 例如useLayoutEffect
       if (flags & Update) {
         try {
-          // commitHookEffectListUnmount(
-          //   HookInsertion | HookHasEffect,
-          //   finishedWork,
-          //   finishedWork.return,
-          // );
+          // 执行的HookInsertion副作用
+          commitHookEffectListUnmount(
+            HookInsertion | HookHasEffect,
+            finishedWork,
+            finishedWork.return,
+          );
           commitHookEffectListMount(
             HookInsertion | HookHasEffect,
             finishedWork,
@@ -743,22 +746,25 @@ function commitMutationEffectsOnFiber(
         if (shouldProfile(finishedWork)) {
           try {
             // startLayoutEffectTimer();
-            // commitHookEffectListUnmount(
-            //   HookLayout | HookHasEffect,
-            //   finishedWork,
-            //   finishedWork.return,
-            // );
+            // 在comit阶段，先执行effect的destory
+            commitHookEffectListUnmount(
+              HookLayout | HookHasEffect,
+              finishedWork,
+              finishedWork.return,
+            );
           } catch (error) {
             // captureCommitPhaseError(finishedWork, finishedWork.return, error);
           }
           // recordLayoutEffectDuration(finishedWork);
         } else {
           try {
-            // commitHookEffectListUnmount(
-            //   HookLayout | HookHasEffect,
-            //   finishedWork,
-            //   finishedWork.return,
-            // );
+            // 在comit阶段，先执行effect的destory
+            // useLayoutEffect
+            commitHookEffectListUnmount(
+              HookLayout | HookHasEffect,
+              finishedWork,
+              finishedWork.return,
+            );
           } catch (error) {
             // captureCommitPhaseError(finishedWork, finishedWork.return, error);
           }
@@ -961,7 +967,7 @@ function commitMutationEffectsOnFiber(
           if (finishedWork.stateNode === null) {
             throw new Error(
               'This should have a text node initialized. This error is likely ' +
-                'caused by a bug in React. Please file an issue.',
+              'caused by a bug in React. Please file an issue.',
             );
           }
 
@@ -1493,6 +1499,7 @@ function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
     const firstEffect = lastEffect.next;
     let effect = firstEffect;
     do {
+      // 前面有HookHasEffect时，这里的flags才会相等
       if ((effect.tag & flags) === flags) {
         if (enableSchedulingProfiler) {
           if ((flags & HookPassive) !== NoHookEffect) {
@@ -1689,6 +1696,9 @@ export function commitPassiveMountEffects(
   // resetCurrentDebugFiberInDEV();
 }
 
+/**
+ * 递归遍历副作用
+ */
 function recursivelyTraversePassiveMountEffects(
   root: any,
   parentFiber: Fiber,
@@ -1696,6 +1706,7 @@ function recursivelyTraversePassiveMountEffects(
   committedTransitions: Array<any> | null,
 ) {
   // const prevDebugFiber = getCurrentDebugFiberInDEV();
+  // 如果子节点有副作用
   if (parentFiber.subtreeFlags & PassiveMask) {
     let child = parentFiber.child;
     while (child !== null) {
