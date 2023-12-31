@@ -76,5 +76,5 @@ const App = () => {
     );
 };
 const root = createRoot(document.getElementById("root"));
-console.log("root", root);
+// console.log("root", root);
 root.render(<App />);
