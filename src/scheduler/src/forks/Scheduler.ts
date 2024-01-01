@@ -69,9 +69,13 @@ const isInputPending =
 
 const continuousOptions = { includeContinuous: enableIsInputPendingContinuous };
 
+/**
+ * 获取当前时间的方法
+ * performance.now()精确点高，不依靠系统时间，但是兼容性有问题。
+ * Date.now()会受系统时间影响，且以Unix时间为基准，不易看懂，无兼容性问题
+ */
 let getCurrentTime: () => number | DOMHighResTimeStamp;
 const hasPerformanceNow =
-  // $FlowFixMe[method-unbinding]
   typeof performance === 'object' && typeof performance.now === 'function';
 
 if (hasPerformanceNow) {
@@ -237,6 +241,8 @@ function cancelHostTimeout() {
 // thread, like user events. By default, it yields multiple times per frame.
 // It does not attempt to align with frame boundaries, since most tasks don't
 // need to be frame aligned; for those that do, use requestAnimationFrame.
+// 每帧的过期时间5毫秒：react每一帧向浏览器申请5毫秒用于自己任务执行
+// 如果5毫秒内没有完成，也会把控制权交给浏览器
 let frameInterval = frameYieldMs;
 const continuousInputInterval = continuousYieldMs;
 const maxInterval = maxYieldMs;
@@ -249,6 +255,8 @@ const performWorkUntilDeadline = () => {
     const currentTime = getCurrentTime();
     // Keep track of the start time so we can measure how long the main thread
     // has been blocked.
+    // 表示时间片的开始
+    console.log('时间片的开始========')
     startTime = currentTime;
 
     // If a scheduler task throws, exit the current browser task so the
@@ -310,7 +318,9 @@ if (typeof localSetImmediate === 'function') {
   };
 }
 
-
+/**
+ * 开始执行工作循环
+ */
 function flushWork(initialTime: number) {
   if (enableProfiling) {
     // markSchedulerUnsuspended(initialTime);
@@ -401,6 +411,7 @@ function shouldYieldToHost(): boolean {
 function workLoop(initialTime: number) {
   let currentTime = initialTime;
   advanceTimers(currentTime);
+  // 当前的任务：取出优先级最高的任务 => 即小顶堆里最顶部的那个任务
   currentTask = peek(taskQueue);
   while (
     currentTask !== null &&
@@ -408,6 +419,7 @@ function workLoop(initialTime: number) {
   ) {
     if (currentTask.expirationTime > currentTime && shouldYieldToHost()) {
       // This currentTask hasn't expired, and we've reached the deadline.
+      // 这个 currentTask 还没有过期，我们已经到达了截止日期
       break;
     }
     const callback = currentTask.callback;
@@ -419,6 +431,7 @@ function workLoop(initialTime: number) {
         // markTaskRun(currentTask, currentTime);
       }
       // 开始执行performConcurrentWorkOnRoot
+      // 如果返回新的回调，说明还有工作没有完成，则返回true，继续执行
       const continuationCallback = callback(didUserCallbackTimeout);
       currentTime = getCurrentTime();
       if (typeof continuationCallback === 'function') {
@@ -429,12 +442,14 @@ function workLoop(initialTime: number) {
           // markTaskYield(currentTask, currentTime);
         }
         advanceTimers(currentTime);
+        // 返回给了hasMoreWork
         return true;
       } else {
         if (enableProfiling) {
           // markTaskCompleted(currentTask, currentTime);
           currentTask.isQueued = false;
         }
+        // 如果当前任务已完成，则不需要继续执行，把当前任务弹出
         if (currentTask === peek(taskQueue)) {
           pop(taskQueue);
         }
@@ -492,6 +507,7 @@ export {
   NormalPriority as unstable_NormalPriority,
   IdlePriority as unstable_IdlePriority,
   LowPriority as unstable_LowPriority,
+  shouldYieldToHost as unstable_shouldYield,
   unstable_scheduleCallback,
   getCurrentTime as unstable_now,
   requestPaint as unstable_requestPaint,

@@ -26,6 +26,7 @@ import {
   // Aliased because `act` will override and push to an internal queue
   scheduleCallback as Scheduler_scheduleCallback,
   NormalPriority as NormalSchedulerPriority,
+  shouldYield,
 } from './Scheduler';
 import { LegacyRoot } from "./ReactRootTags";
 
@@ -382,6 +383,16 @@ function prepareFreshStack(root, lanes: Lanes): Fiber {
   finishQueueingConcurrentUpdates();
 
   return rootWorkInProgress;
+}
+
+/**
+ * 并发渲染
+ */
+function workLoopConcurrent() {
+  // Perform work until Scheduler asks us to yield
+  while (workInProgress !== null && !shouldYield()) {
+    performUnitOfWork(workInProgress);
+  }
 }
 
 function workLoopSync() {
