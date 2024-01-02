@@ -1,3 +1,15 @@
+/**
+ * 最小堆
+ * 数据结构：数组
+ * 特点：
+ * 1、最小堆是一颗完全二叉树
+ * 2、父节点找左子节点的下标=(index + 1) * 2 - 1
+ * 3、左子节点的下标=左子节点 + 1
+ * 4、子节点找父节点下标=(index - 1) >>> 1
+ * 5、每次push、pop之后重新调整堆树的结构，保证最小的值始终在第一个，也就是堆顶
+ * 优点：
+ * 1、减少排序的时间复杂度，O(log^n)
+ */
 
 type Node = {
   id: number,
@@ -5,18 +17,22 @@ type Node = {
 };
 type Heap<T extends Node> = Array<T>;
 
-
+/**
+ * 添加一个新的元素之后向上调整
+ */
 export function push<T extends Node>(heap: Heap<T>, node: T): void {
   const index = heap.length;
   heap.push(node);
   siftUp(heap, node, index);
 }
 
-
 export function peek<T extends Node>(heap: Heap<T>): T | null {
   return heap.length === 0 ? null : heap[0];
 }
 
+/**
+ * 取出堆顶元素(即最小值)后，将最后一个元素放到第一个位置，重新向下调整
+ */
 export function pop<T extends Node>(heap: Heap<T>): T | null {
   if (heap.length === 0) {
     return null;
@@ -30,7 +46,9 @@ export function pop<T extends Node>(heap: Heap<T>): T | null {
   return first;
 }
 
-
+/**
+ * 向上调整：将最后添加的元素向上调整
+ */
 function siftUp<T extends Node>(heap: Heap<T>, node: T, i: number): void {
   let index = i;
   while (index > 0) {
@@ -48,6 +66,9 @@ function siftUp<T extends Node>(heap: Heap<T>, node: T, i: number): void {
   }
 }
 
+/**
+ * 向下调整：将第一个元素向下调整
+ */
 function siftDown<T extends Node>(heap: Heap<T>, node: T, i: number): void {
   let index = i;
   const length = heap.length;
