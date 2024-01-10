@@ -25,7 +25,7 @@ import {
   TracingMarkerComponent,
 } from './ReactWorkTags';
 import { Lanes } from "./ReactFiberLane";
-import { Instance, TextInstance, appendChild, appendChildToContainer, clearContainer, commitTextUpdate, commitUpdate, getPublicInstance, insertBefore, insertInContainerBefore, resetTextContent, supportsMutation, supportsResources, supportsSingletons } from "react-dom-bindings/src/client/ReactFiberConfigDOM";
+import { Instance, TextInstance, appendChild, appendChildToContainer, clearContainer, commitTextUpdate, commitUpdate, getPublicInstance, insertBefore, insertInContainerBefore, removeChild, removeChildFromContainer, resetTextContent, supportsMutation, supportsResources, supportsSingletons } from "react-dom-bindings/src/client/ReactFiberConfigDOM";
 import { Container } from "index";
 import {
   NoFlags as NoHookEffect,
@@ -362,6 +362,19 @@ function commitDeletionEffects(
   detachFiberMutation(deletedFiber);
 }
 
+function recursivelyTraverseDeletionEffects(
+  finishedRoot: any,
+  nearestMountedAncestor: Fiber,
+  parent: Fiber,
+) {
+  // TODO: Use a static flag to skip trees that don't have unmount effects
+  let child = parent.child;
+  while (child !== null) {
+    commitDeletionEffectsOnFiber(finishedRoot, nearestMountedAncestor, child);
+    child = child.sibling;
+  }
+}
+
 function commitDeletionEffectsOnFiber(
   finishedRoot,
   nearestMountedAncestor: Fiber,
@@ -388,28 +401,29 @@ function commitDeletionEffectsOnFiber(
         const prevHostParent = hostParent;
         const prevHostParentIsContainer = hostParentIsContainer;
         hostParent = null;
-        // recursivelyTraverseDeletionEffects(
-        //   finishedRoot,
-        //   nearestMountedAncestor,
-        //   deletedFiber,
-        // );
+        recursivelyTraverseDeletionEffects(
+          finishedRoot,
+          nearestMountedAncestor,
+          deletedFiber,
+        );
         hostParent = prevHostParent;
         hostParentIsContainer = prevHostParentIsContainer;
 
         if (hostParent !== null) {
           // Now that all the child effects have unmounted, we can remove the
           // node from the tree.
-          // if (hostParentIsContainer) {
-          //   removeChildFromContainer(
-          //     ((hostParent: any): Container),
-          //     (deletedFiber.stateNode: Instance | TextInstance),
-          //   );
-          // } else {
-          //   removeChild(
-          //     ((hostParent: any): Instance),
-          //     (deletedFiber.stateNode: Instance | TextInstance),
-          //   );
-          // }
+          // 所有子节点的副作用已经卸载，可以从DOM tree中移除这个节点了
+          if (hostParentIsContainer) {
+            removeChildFromContainer(
+              ((hostParent as any) as Container),
+              (deletedFiber.stateNode as Instance | TextInstance),
+            );
+          } else {
+            removeChild(
+              ((hostParent as any) as Instance),
+              (deletedFiber.stateNode as Instance | TextInstance),
+            );
+          }
         }
       }
       return;
@@ -418,27 +432,27 @@ function commitDeletionEffectsOnFiber(
     case ForwardRef:
     case MemoComponent:
     case SimpleMemoComponent: {
-      // recursivelyTraverseDeletionEffects(
-      //   finishedRoot,
-      //   nearestMountedAncestor,
-      //   deletedFiber,
-      // );
+      recursivelyTraverseDeletionEffects(
+        finishedRoot,
+        nearestMountedAncestor,
+        deletedFiber,
+      );
       return;
     }
     case ClassComponent: {
-      // recursivelyTraverseDeletionEffects(
-      //   finishedRoot,
-      //   nearestMountedAncestor,
-      //   deletedFiber,
-      // );
+      recursivelyTraverseDeletionEffects(
+        finishedRoot,
+        nearestMountedAncestor,
+        deletedFiber,
+      );
       return;
     }
     default: {
-      // recursivelyTraverseDeletionEffects(
-      //   finishedRoot,
-      //   nearestMountedAncestor,
-      //   deletedFiber,
-      // );
+      recursivelyTraverseDeletionEffects(
+        finishedRoot,
+        nearestMountedAncestor,
+        deletedFiber,
+      );
       return;
     }
   }
@@ -453,6 +467,12 @@ function detachFiberMutation(fiber: Fiber) {
   fiber.return = null;
 }
 
+/**
+ * commit提交阶段执行commitMutationEffectsOnFiber
+ * 递归处理
+ * 1、删除节点
+ * 2、更新DOM内容
+ */
 function recursivelyTraverseMutationEffects(
   root,
   parentFiber: Fiber,

@@ -68,6 +68,7 @@ export function createHostRootFiber(
 ): Fiber {
   let mode;
   if (tag === ConcurrentRoot) {
+    // 并发模式赋值
     mode = ConcurrentMode;
     if (isStrictMode === true) {
       mode |= StrictLegacyMode | StrictEffectsMode;

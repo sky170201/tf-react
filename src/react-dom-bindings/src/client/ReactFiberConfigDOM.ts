@@ -46,6 +46,10 @@ export type Instance = Element;
 export type TextInstance = Text;
 export type HostContext = any;
 
+export interface SuspenseInstance extends Comment {
+  _reactRetry?: () => void;
+}
+
 export const supportsSingletons = true;
 
 // -------------------
@@ -268,4 +272,22 @@ export function getCurrentEventPriority(): EventPriority {
 
 export function getPublicInstance(instance: Instance): Instance {
   return instance;
+}
+
+export function removeChild(
+  parentInstance: Instance,
+  child: Instance | TextInstance | SuspenseInstance,
+): void {
+  parentInstance.removeChild(child);
+}
+
+export function removeChildFromContainer(
+  container,
+  child,
+): void {
+  if (container.nodeType === COMMENT_NODE) {
+    container.parentNode.removeChild(child);
+  } else {
+    container.removeChild(child);
+  }
 }

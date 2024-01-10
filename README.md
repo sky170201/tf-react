@@ -82,4 +82,30 @@
   - bailoutOnAlreadyFinishedWork
   ```
 
-  
+- 2024年1月10日17:10:31
+  - 1. 处理节点删除逻辑
+  ```js
+  // 收集需要删除的fiber
+  // 在commit阶段的commitMutationEffectOnFiber的commitDeletionEffectsOnFiber中删除fiber.stateNode
+  function createChildReconciler() {
+    function deleteChild(returnFiber: Fiber, childToDelete: Fiber): void {
+      if (!shouldTrackSideEffects) {
+        // Noop.
+        return;
+      }
+      const deletions = returnFiber.deletions;
+      if (deletions === null) {
+        returnFiber.deletions = [childToDelete];
+        returnFiber.flags |= ChildDeletion;
+      } else {
+        deletions.push(childToDelete);
+      }
+    }
+  }
+
+  removeChild(
+    ((hostParent as any) as Instance),
+    (deletedFiber.stateNode as Instance | TextInstance),
+  );
+
+  ```

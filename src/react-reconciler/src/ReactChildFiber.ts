@@ -56,6 +56,7 @@ function createChildReconciler(
   shouldTrackSideEffects: boolean,
 ): ChildReconciler {
   
+  // 收集需要删除的fiber,在commit阶段的commitMutationEffectOnFiber的commitDeletionEffectsOnFiber中删除fiber.stateNode
   function deleteChild(returnFiber: Fiber, childToDelete: Fiber): void {
     if (!shouldTrackSideEffects) {
       // Noop.
@@ -307,6 +308,11 @@ function createChildReconciler(
     return null;
   }
   
+  /**
+   * key的比较就发生在这里
+   * 如果key相同，会复用节点，返回复用之后的新fiber
+   * 如果key不同，返回null，重新创建fiber，比将旧的fiber添加到deletions数组
+   */
   function updateSlot(
     returnFiber: Fiber,
     oldFiber: Fiber | null,
@@ -498,6 +504,23 @@ function createChildReconciler(
   /**
    * 将数组子节点转成fiber结构
    * ['div', 1] => [{divFiber}, {1Fiber}]
+    多节点 DIFF
+      DOM DIFF 的三个规则
+      只对同级元素进行比较，不同层级不对比
+      不同的类型对应不同的元素
+      可以通过 key 来标识同一个节点
+      第 1 轮遍历
+      如果 key 不同则直接结束本轮循环
+      newChildren 或 oldFiber 遍历完，结束本轮循环
+      key 相同而 type 不同，标记老的 oldFiber 为删除，继续循环
+      key 相同而 type 也相同，则可以复用老节 oldFiber 节点，继续循环
+      第 2 轮遍历
+      newChildren 遍历完而 oldFiber 还有，遍历剩下所有的 oldFiber 标记为删除，DIFF 结束
+      oldFiber 遍历完了，而 newChildren 还有，将剩下的 newChildren 标记为插入，DIFF 结束
+      newChildren 和 oldFiber 都同时遍历完成，diff 结束
+      newChildren 和 oldFiber 都没有完成，则进行节点移动的逻辑
+      第 3 轮遍历
+      处理节点移动的情况
    */
   function reconcileChildrenArray(
     returnFiber: Fiber,
@@ -657,6 +680,7 @@ function createChildReconciler(
     return resultingFirstChild;
   }
   
+  // 标记单个节点为替换
   function placeSingleChild(newFiber: Fiber): Fiber {
     // This is simpler for the single child case. We only need to do a
     // placement for inserting new children.
@@ -666,6 +690,7 @@ function createChildReconciler(
     return newFiber;
   }
   
+  // 处理单节点
   function reconcileSingleElement(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
@@ -678,6 +703,7 @@ function createChildReconciler(
       // TODO: If key === null and child.key === null, then this only applies to
       // the first item in the list.
       if (child.key === key) {
+        // 单节点，key相同，类型不同
         const elementType = element.type;
         if (elementType === REACT_FRAGMENT_TYPE) {
           if (child.tag === Fragment) {

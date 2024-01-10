@@ -39,21 +39,32 @@ const reducer = (state, action) => {
     }
 };
 
+const Child1 = (props) => {
+    const { count } = props
+
+    useEffect(() => {
+        console.log('Child1 create')
+        return () => {
+            console.log('Child1 destory')
+        }
+    }, [])
+    return <div>Child{count}</div>
+}
 const App = () => {
     const [count, setCount] = useState(1);
-    useEffect(() => {
-        console.log("useEffect create");
-        return () => {
-            console.log("useEffect destory");
-        };
-    }, [count]);
+    // useEffect(() => {
+    //     console.log("useEffect create");
+    //     return () => {
+    //         console.log("useEffect destory");
+    //     };
+    // }, [count]);
 
-    useLayoutEffect(() => {
-        console.log("useLayoutEffect create");
-        return () => {
-            console.log("useLayoutEffect destory");
-        };
-    }, [count]);
+    // useLayoutEffect(() => {
+    //     console.log("useLayoutEffect create");
+    //     return () => {
+    //         console.log("useLayoutEffect destory");
+    //     };
+    // }, [count]);
     // const newCount = useMemo(() => {
     //   count * 3;
     // }, [count]);
@@ -69,9 +80,11 @@ const App = () => {
                     setCount(count + 1);
                 }}
             >
-                add {count}
+                {/* add {count} */}
+                toggle
             </button>
             {/* <MemoChild getName={getName} newCount={newCount} /> */}
+            <Child1 count={count} key={count}/>
         </div>
     );
 };
