@@ -109,3 +109,24 @@
   );
 
   ```
+
+- 2024年1月11日09:57:06
+  - 1. 处理切换某个组件的显隐逻辑
+  ```js
+  // 例如有如下用例
+  const App = () => {
+      const [isShow, setIsShow] = useState(false)
+
+      return (
+          <div>
+              <button onClick={() => setIsShow(!isShow)}>
+                  toggle
+              </button>
+              { isShow ? <Child1 /> : <Child2 />}
+          </div>
+      );
+  };
+  当isShoe = true, Child1和Child2切换时
+  1、会先进入beginWork阶段，进行diff对比，发现Child2被卸载了，会在div的fiber节点的deletions的数组上添加Child2 fiber节点，然后给Child1标记为Placement
+  2、在commit提交阶段，会先执行flushPassiveEffects方法处理副作用，先做卸载操作commitPassiveMountEffects，待卸载组件useEffect的destroy会在这个阶段执行,再执行commitPassiveMountEffects，待渲染组件useEffect的create会在这个阶段执行
+  ```

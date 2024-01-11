@@ -48,10 +48,23 @@ const Child1 = (props) => {
             console.log('Child1 destory')
         }
     }, [])
-    return <div>Child{count}</div>
+    return <div>Child1{count}</div>
+}
+
+const Child2 = (props) => {
+    const { count } = props
+
+    useEffect(() => {
+        console.log('Child2 create')
+        return () => {
+            console.log('Child2 destory')
+        }
+    }, [])
+    return <div>Child2{count}</div>
 }
 const App = () => {
-    const [count, setCount] = useState(1);
+    // const [count, setCount] = useState(1);
+    const [isShow, setIsShow] = useState(false)
     // useEffect(() => {
     //     console.log("useEffect create");
     //     return () => {
@@ -77,14 +90,16 @@ const App = () => {
         <div>
             <button
                 onClick={() => {
-                    setCount(count + 1);
+                    // setCount(count + 1);
+                    setIsShow(!isShow)
                 }}
             >
                 {/* add {count} */}
                 toggle
             </button>
             {/* <MemoChild getName={getName} newCount={newCount} /> */}
-            <Child1 count={count} key={count}/>
+            {/* <Child1 count={count} key={count}/> */}
+            { isShow ? <Child1 /> : <Child2 />}
         </div>
     );
 };

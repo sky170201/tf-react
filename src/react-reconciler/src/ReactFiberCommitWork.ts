@@ -38,6 +38,7 @@ import {
 import { UpdateQueue } from "./ReactFiberHooks";
 import { ConcurrentMode, NoMode } from "./ReactTypeOfMode";
 import { OffscreenInstance, OffscreenPassiveEffectsConnected, OffscreenState } from "./ReactFiberActivityComponent";
+import { detachDeletedInstance } from "react-dom-bindings/src/client/ReactDOMComponentTree";
 
 type FunctionComponentUpdateQueue = any
 
@@ -1320,7 +1321,7 @@ function commitLayoutEffectOnFiber(
         const updateQueue: UpdateQueue<any, any> | null =
           (finishedWork.updateQueue as any);
         if (updateQueue !== null) {
-          let instance = null;
+          let instance: any = null;
           if (finishedWork.child !== null) {
             switch (finishedWork.child.tag) {
               case HostSingleton:
@@ -1560,6 +1561,7 @@ function commitPassiveUnmountOnFiber(finishedWork: Fiber): void {
     case FunctionComponent:
     case ForwardRef:
     case SimpleMemoComponent: {
+
       recursivelyTraversePassiveUnmountEffects(finishedWork);
       if (finishedWork.flags & Passive) {
         commitHookPassiveUnmountEffects(
@@ -1667,6 +1669,234 @@ function commitHookPassiveUnmountEffects(
   }
 }
 
+function commitPassiveUnmountInsideDeletedTreeOnFiber(
+  current: Fiber,
+  nearestMountedAncestor: Fiber | null,
+): void {
+  switch (current.tag) {
+    case FunctionComponent:
+    case ForwardRef:
+    case SimpleMemoComponent: {
+      commitHookPassiveUnmountEffects(
+        current,
+        nearestMountedAncestor,
+        HookPassive,
+      );
+      break;
+    }
+    // TODO: run passive unmount effects when unmounting a root.
+    // Because passive unmount effects are not currently run,
+    // the cache instance owned by the root will never be freed.
+    // When effects are run, the cache should be freed here:
+    // case HostRoot: {
+    //   if (enableCache) {
+    //     const cache = current.memoizedState.cache;
+    //     releaseCache(cache);
+    //   }
+    //   break;
+    // }
+    // case LegacyHiddenComponent:
+    // case OffscreenComponent: {
+    //   if (enableCache) {
+    //     if (
+    //       current.memoizedState !== null &&
+    //       current.memoizedState.cachePool !== null
+    //     ) {
+    //       const cache: Cache = current.memoizedState.cachePool.pool;
+    //       // Retain/release the cache used for pending (suspended) nodes.
+    //       // Note that this is only reached in the non-suspended/visible case:
+    //       // when the content is suspended/hidden, the retain/release occurs
+    //       // via the parent Suspense component (see case above).
+    //       if (cache != null) {
+    //         retainCache(cache);
+    //       }
+    //     }
+    //   }
+    //   break;
+    // }
+    // case SuspenseComponent: {
+    //   if (enableTransitionTracing) {
+    //     // We need to mark this fiber's parents as deleted
+    //     const offscreenFiber: Fiber = (current.child: any);
+    //     const instance: OffscreenInstance = offscreenFiber.stateNode;
+    //     const transitions = instance._transitions;
+    //     if (transitions !== null) {
+    //       const abortReason = {
+    //         reason: 'suspense',
+    //         name: current.memoizedProps.unstable_name || null,
+    //       };
+    //       if (
+    //         current.memoizedState === null ||
+    //         current.memoizedState.dehydrated === null
+    //       ) {
+    //         abortParentMarkerTransitionsForDeletedFiber(
+    //           offscreenFiber,
+    //           abortReason,
+    //           transitions,
+    //           instance,
+    //           true,
+    //         );
+
+    //         if (nearestMountedAncestor !== null) {
+    //           abortParentMarkerTransitionsForDeletedFiber(
+    //             nearestMountedAncestor,
+    //             abortReason,
+    //             transitions,
+    //             instance,
+    //             false,
+    //           );
+    //         }
+    //       }
+    //     }
+    //   }
+    //   break;
+    // }
+    // case CacheComponent: {
+    //   if (enableCache) {
+    //     const cache = current.memoizedState.cache;
+    //     releaseCache(cache);
+    //   }
+    //   break;
+    // }
+    // case TracingMarkerComponent: {
+    //   if (enableTransitionTracing) {
+    //     // We need to mark this fiber's parents as deleted
+    //     const instance = current.stateNode;
+    //     const transitions = instance.transitions;
+    //     if (transitions !== null) {
+    //       const abortReason = {
+    //         reason: 'marker',
+    //         name: current.memoizedProps.name,
+    //       };
+    //       abortParentMarkerTransitionsForDeletedFiber(
+    //         current,
+    //         abortReason,
+    //         transitions,
+    //         null,
+    //         true,
+    //       );
+
+    //       if (nearestMountedAncestor !== null) {
+    //         abortParentMarkerTransitionsForDeletedFiber(
+    //           nearestMountedAncestor,
+    //           abortReason,
+    //           transitions,
+    //           null,
+    //           false,
+    //         );
+    //       }
+    //     }
+    //   }
+    //   break;
+    // }
+  }
+}
+
+/**
+ * 提交阶段，如果子组件被删除了，需要递归卸载副作用
+ * @param deletedSubtreeRoot 
+ * @param nearestMountedAncestor 
+ */
+function commitPassiveUnmountEffectsInsideOfDeletedTree_begin(
+  deletedSubtreeRoot: Fiber,
+  nearestMountedAncestor: Fiber | null,
+) {
+  while (nextEffect !== null) {
+    const fiber = nextEffect;
+
+    // Deletion effects fire in parent -> child order
+    // TODO: Check if fiber has a PassiveStatic flag
+    // setCurrentDebugFiberInDEV(fiber);
+    commitPassiveUnmountInsideDeletedTreeOnFiber(fiber, nearestMountedAncestor);
+    // resetCurrentDebugFiberInDEV();
+
+    const child = fiber.child;
+    // TODO: Only traverse subtree if it has a PassiveStatic flag.
+    // 如果子树也有副作用标识的话，会递归遍历
+    if (child !== null) {
+      child.return = fiber;
+      nextEffect = child;
+    } else {
+      commitPassiveUnmountEffectsInsideOfDeletedTree_complete(
+        deletedSubtreeRoot,
+      );
+    }
+  }
+}
+
+/**
+ * 清空fiber属性
+ * @param fiber 
+ */
+function detachFiberAfterEffects(fiber: Fiber) {
+  const alternate = fiber.alternate;
+  if (alternate !== null) {
+    fiber.alternate = null;
+    detachFiberAfterEffects(alternate);
+  }
+
+  // Clear cyclical Fiber fields. This level alone is designed to roughly
+  // approximate the planned Fiber refactor. In that world, `setState` will be
+  // bound to a special "instance" object instead of a Fiber. The Instance
+  // object will not have any of these fields. It will only be connected to
+  // the fiber tree via a single link at the root. So if this level alone is
+  // sufficient to fix memory issues, that bodes well for our plans.
+  fiber.child = null;
+  fiber.deletions = null;
+  fiber.sibling = null;
+
+  // The `stateNode` is cyclical because on host nodes it points to the host
+  // tree, which has its own pointers to children, parents, and siblings.
+  // The other host nodes also point back to fibers, so we should detach that
+  // one, too.
+  if (fiber.tag === HostComponent) {
+    const hostInstance: Instance = fiber.stateNode;
+    if (hostInstance !== null) {
+      detachDeletedInstance(hostInstance);
+    }
+  }
+  fiber.stateNode = null;
+
+  // Theoretically, nothing in here should be necessary, because we already
+  // disconnected the fiber from the tree. So even if something leaks this
+  // particular fiber, it won't leak anything else.
+  fiber.return = null;
+  fiber.dependencies = null;
+  fiber.memoizedProps = null;
+  fiber.memoizedState = null;
+  fiber.pendingProps = null;
+  fiber.stateNode = null;
+  // TODO: Move to `commitPassiveUnmountInsideDeletedTreeOnFiber` instead.
+  fiber.updateQueue = null;
+}
+
+function commitPassiveUnmountEffectsInsideOfDeletedTree_complete(
+  deletedSubtreeRoot: Fiber,
+) {
+  while (nextEffect !== null) {
+    const fiber = nextEffect;
+    const sibling = fiber.sibling;
+    const returnFiber = fiber.return;
+
+    // Recursively traverse the entire deleted tree and clean up fiber fields.
+    // This is more aggressive than ideal, and the long term goal is to only
+    // have to detach the deleted tree at the root.
+    detachFiberAfterEffects(fiber);
+    if (fiber === deletedSubtreeRoot) {
+      nextEffect = null;
+      return;
+    }
+
+    if (sibling !== null) {
+      sibling.return = returnFiber;
+      nextEffect = sibling;
+      return;
+    }
+
+    nextEffect = returnFiber;
+  }
+}
+
 function recursivelyTraversePassiveUnmountEffects(parentFiber: Fiber): void {
   // Deletions effects can be scheduled on any fiber type. They need to happen
   // before the children effects have fired.
@@ -1678,10 +1908,10 @@ function recursivelyTraversePassiveUnmountEffects(parentFiber: Fiber): void {
         const childToDelete = deletions[i];
         // TODO: Convert this to use recursion
         nextEffect = childToDelete;
-        // commitPassiveUnmountEffectsInsideOfDeletedTree_begin(
-        //   childToDelete,
-        //   parentFiber,
-        // );
+        commitPassiveUnmountEffectsInsideOfDeletedTree_begin(
+          childToDelete,
+          parentFiber,
+        );
       }
     }
     // detachAlternateSiblings(parentFiber);
