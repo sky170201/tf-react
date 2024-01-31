@@ -1,6 +1,7 @@
 import { Lane, Lanes, NoLanes } from "./ReactFiberLane";
 import { Fiber } from "./ReactInternalTypes";
-import { unsafe_markUpdateLaneFromFiberToRoot } from './ReactFiberConcurrentUpdates'
+import { enqueueConcurrentClassUpdate, unsafe_markUpdateLaneFromFiberToRoot } from './ReactFiberConcurrentUpdates'
+import { isUnsafeClassRenderPhaseUpdate } from "./ReactFiberWorkLoop";
 
 export const UpdateState = 0;
 export const ReplaceState = 1;
@@ -49,36 +50,36 @@ export function enqueueUpdate<State>(
 
   const sharedQueue = updateQueue.shared;
 
-  // if (isUnsafeClassRenderPhaseUpdate(fiber)) {
-  // This is an unsafe render phase update. Add directly to the update
-  // queue so we can process it immediately during the current render.
-  const pending = sharedQueue.pending;
-  if (pending === null) {
-    // This is the first update. Create a circular list.
-    update.next = update;
-  } else {
-    update.next = pending.next;
-    pending.next = update;
-  }
-  sharedQueue.pending = update;
+  if (isUnsafeClassRenderPhaseUpdate(fiber)) {
+    // This is an unsafe render phase update. Add directly to the update
+    // queue so we can process it immediately during the current render.
+    const pending = sharedQueue.pending;
+    if (pending === null) {
+      // This is the first update. Create a circular list.
+      update.next = update;
+    } else {
+      update.next = pending.next;
+      pending.next = update;
+    }
+    sharedQueue.pending = update;
 
-  // Update the childLanes even though we're most likely already rendering
-  // this fiber. This is for backwards compatibility in the case where you
-  // update a different component during render phase than the one that is
-  // currently renderings (a pattern that is accompanied by a warning).
-  //   return unsafe_markUpdateLaneFromFiberToRoot(fiber, lane);
-  // } else {
-  //   return enqueueConcurrentClassUpdate(fiber, sharedQueue, update, lane);
-  // }
-  return unsafe_markUpdateLaneFromFiberToRoot(fiber, lane)
+    // Update the childLanes even though we're most likely already rendering
+    // this fiber. This is for backwards compatibility in the case where you
+    // update a different component during render phase than the one that is
+    // currently renderings (a pattern that is accompanied by a warning).
+    return unsafe_markUpdateLaneFromFiberToRoot(fiber, lane);
+  } else {
+    return enqueueConcurrentClassUpdate(fiber, sharedQueue, update, lane);
+  }
 }
 
-export function processUpdateQueue(
-  workInProgress: Fiber,
-  props: any,
-  instance: any,
-  renderLanes: Lanes,
-) {
+export function
+  processUpdateQueue(
+    workInProgress: Fiber,
+    props: any,
+    instance: any,
+    renderLanes: Lanes,
+  ) {
   const queue = workInProgress.updateQueue;
   let pendingQueue = queue.shared.pending;
   if (pendingQueue !== null) {

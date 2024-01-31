@@ -1,6 +1,7 @@
-import { enableUnifiedSyncLane } from "shared/ReactFeatureFlags";
+import { allowConcurrentByDefault, enableRetryLaneExpiration, enableUnifiedSyncLane } from "shared/ReactFeatureFlags";
 import { ConcurrentUpdate } from "./ReactFiberConcurrentUpdates";
 import { clz32 } from "./clz32";
+import { ConcurrentUpdatesByDefaultMode, NoMode } from "./ReactTypeOfMode";
 
 export type Lanes = number;
 export type Lane = number;
@@ -128,6 +129,29 @@ export function includesSomeLane(a: Lanes | Lane, b: Lanes | Lane): boolean {
 
 export function includesSyncLane(lanes: Lanes): boolean {
   return (lanes & (SyncLane | SyncHydrationLane)) !== NoLanes;
+}
+
+export function includesBlockingLane(root: any, lanes: Lanes): boolean {
+  // 允许默认并发渲染
+  if (
+    allowConcurrentByDefault &&
+    (root.current.mode & ConcurrentUpdatesByDefaultMode) !== NoMode
+  ) {
+    // Concurrent updates by default always use time slicing.
+    return false;
+  }
+  const SyncDefaultLanes =
+    InputContinuousHydrationLane |
+    InputContinuousLane |
+    DefaultHydrationLane |
+    DefaultLane;
+  return (lanes & SyncDefaultLanes) !== NoLanes;
+}
+
+export function includesExpiredLane(root: any, lanes: Lanes): boolean {
+  // This is a separate check from includesBlockingLane because a lane can
+  // expire after a render has already started.
+  return (lanes & root.expiredLanes) !== NoLanes;
 }
 
 function getHighestPriorityLanes(lanes: Lanes | Lane): Lanes {
@@ -346,4 +370,108 @@ function markSpawnedDeferredLane(
     // updates that the parent task did. We can exclude any lane that is not
     // used for updates (e.g. Offscreen).
     (entangledLanes & UpdateLanes);
+}
+
+function computeExpirationTime(lane: Lane, currentTime: number) {
+  switch (lane) {
+    case SyncHydrationLane:
+    case SyncLane:
+    case InputContinuousHydrationLane:
+    case InputContinuousLane:
+      // User interactions should expire slightly more quickly.
+      //
+      // NOTE: This is set to the corresponding constant as in Scheduler.js.
+      // When we made it larger, a product metric in www regressed, suggesting
+      // there's a user interaction that's being starved by a series of
+      // synchronous updates. If that theory is correct, the proper solution is
+      // to fix the starvation. However, this scenario supports the idea that
+      // expiration times are an important safeguard when starvation
+      // does happen.
+      return currentTime + 250;
+    case DefaultHydrationLane:
+    case DefaultLane:
+    case TransitionHydrationLane:
+    case TransitionLane1:
+    case TransitionLane2:
+    case TransitionLane3:
+    case TransitionLane4:
+    case TransitionLane5:
+    case TransitionLane6:
+    case TransitionLane7:
+    case TransitionLane8:
+    case TransitionLane9:
+    case TransitionLane10:
+    case TransitionLane11:
+    case TransitionLane12:
+    case TransitionLane13:
+    case TransitionLane14:
+    case TransitionLane15:
+      return currentTime + 5000;
+    case RetryLane1:
+    case RetryLane2:
+    case RetryLane3:
+    case RetryLane4:
+      // TODO: Retries should be allowed to expire if they are CPU bound for
+      // too long, but when I made this change it caused a spike in browser
+      // crashes. There must be some other underlying bug; not super urgent but
+      // ideally should figure out why and fix it. Unfortunately we don't have
+      // a repro for the crashes, only detected via production metrics.
+      return enableRetryLaneExpiration ? currentTime + 5000 : NoTimestamp;
+    case SelectiveHydrationLane:
+    case IdleHydrationLane:
+    case IdleLane:
+    case OffscreenLane:
+    case DeferredLane:
+      // Anything idle priority or lower should never expire.
+      return NoTimestamp;
+    default:
+      return NoTimestamp;
+  }
+}
+
+export function markStarvedLanesAsExpired(
+  root: any,
+  currentTime: number,
+): void {
+  // TODO: This gets called every time we yield. We can optimize by storing
+  // the earliest expiration time on the root. Then use that to quickly bail out
+  // of this function.
+
+  const pendingLanes = root.pendingLanes;
+  const suspendedLanes = root.suspendedLanes;
+  const pingedLanes = root.pingedLanes;
+  const expirationTimes = root.expirationTimes;
+
+  // Iterate through the pending lanes and check if we've reached their
+  // expiration time. If so, we'll assume the update is being starved and mark
+  // it as expired to force it to finish.
+  // TODO: We should be able to replace this with upgradePendingLanesToSync
+  //
+  // We exclude retry lanes because those must always be time sliced, in order
+  // to unwrap uncached promises.
+  // TODO: Write a test for this
+  let lanes = pendingLanes & ~RetryLanes;
+  while (lanes > 0) {
+    const index = pickArbitraryLaneIndex(lanes);
+    const lane = 1 << index;
+
+    const expirationTime = expirationTimes[index];
+    if (expirationTime === NoTimestamp) {
+      // Found a pending lane with no expiration time. If it's not suspended, or
+      // if it's pinged, assume it's CPU-bound. Compute a new expiration time
+      // using the current time.
+      if (
+        (lane & suspendedLanes) === NoLanes ||
+        (lane & pingedLanes) !== NoLanes
+      ) {
+        // Assumes timestamps are monotonically increasing.
+        expirationTimes[index] = computeExpirationTime(lane, currentTime);
+      }
+    } else if (expirationTime <= currentTime) {
+      // This lane expired
+      root.expiredLanes |= lane;
+    }
+
+    lanes &= ~lane;
+  }
 }

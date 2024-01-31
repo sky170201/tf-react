@@ -122,7 +122,6 @@ function bubbleProperties(completedWork: Fiber) {
     //     subtreeFlags |= child.subtreeFlags & StaticMask;
     //     subtreeFlags |= child.flags & StaticMask;
 
-    //     // $FlowFixMe[unsafe-addition] addition with possible null/undefined value
     //     treeBaseDuration += child.treeBaseDuration;
     //     child = child.sibling;
     //   }

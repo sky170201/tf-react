@@ -28,3 +28,8 @@ export const disableTextareaChildren = false;
 export const enableUseRefAccessWarning = false;
 
 export const enableUnifiedSyncLane = true;
+
+/**
+ * Enables an expiration time for retry lanes to avoid starvation.
+ */
+export const enableRetryLaneExpiration = false;

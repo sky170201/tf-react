@@ -501,6 +501,21 @@ function requestPaint() {
   // Since we yield every frame regardless, `requestPaint` has no effect.
 }
 
+function unstable_cancelCallback(task: Task) {
+  if (enableProfiling) {
+    if (task.isQueued) {
+      const currentTime = getCurrentTime();
+      // markTaskCanceled(task, currentTime);
+      task.isQueued = false;
+    }
+  }
+
+  // Null out the callback to indicate the task has been canceled. (Can't
+  // remove from the queue because you can't remove arbitrary nodes from an
+  // array based heap, only the first one.)
+  task.callback = null;
+}
+
 export {
   ImmediatePriority as unstable_ImmediatePriority,
   UserBlockingPriority as unstable_UserBlockingPriority,
@@ -509,6 +524,7 @@ export {
   LowPriority as unstable_LowPriority,
   shouldYieldToHost as unstable_shouldYield,
   unstable_scheduleCallback,
+  unstable_cancelCallback,
   getCurrentTime as unstable_now,
   requestPaint as unstable_requestPaint,
 };

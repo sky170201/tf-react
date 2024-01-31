@@ -1,9 +1,9 @@
 
-import { IdleLane, Lane, Lanes, NoLane, NoLanes, SyncLane, getNextLanes, includesSyncLane, markRootFinished, mergeLanes } from "./ReactFiberLane";
+import { IdleLane, Lane, Lanes, NoLane, NoLanes, SyncLane, getNextLanes, includesBlockingLane, includesExpiredLane, includesSyncLane, markRootFinished, mergeLanes } from "./ReactFiberLane";
 import { Fiber } from "./ReactInternalTypes";
 import { createWorkInProgress } from './ReactFiber'
 import {
-  ensureRootIsScheduled,
+  ensureRootIsScheduled, getContinuationForRoot,
 } from './ReactFiberRootScheduler';
 import { beginWork } from "./ReactFiberBeginWork";
 import { completeWork } from './ReactFiberCompleteWork';
@@ -308,7 +308,8 @@ export function flushPassiveEffects(): boolean {
   return false;
 }
 
-export function performConcurrentWorkOnRoot(root) {
+export function performConcurrentWorkOnRoot(root, didTimeout: boolean,): any {
+  // 获取当前根节点上的任务
   const originalCallbackNode = root.callbackNode;
   const didFlushPassiveEffects = flushPassiveEffects();
   // console.log('didFlushPassiveEffects', didFlushPassiveEffects)
@@ -332,17 +333,50 @@ export function performConcurrentWorkOnRoot(root) {
     // Defensive coding. This is never expected to happen.
     return null;
   }
-  renderRootSync(root)
-  const finishedWork = root.current.alternate;
-  root.finishedWork = finishedWork;
-  finishConcurrentRender(root)
+  // 如果不包含阻塞车道、过期车道且没有超，就开启时间分片，进行并发渲染,可以中断执行
+  // 是否不包含阻塞车道
+  const nonIncludesBlockingLane = !includesBlockingLane(root, lanes)
+  // 是否不含包过期车道
+  const nonIncludesExpiredLane = !includesExpiredLane(root, lanes)
+  // 时间片没有过期
+  const nonTimeout = !didTimeout
+  const shouldTimeSlice = nonIncludesBlockingLane && nonIncludesExpiredLane && nonTimeout
+  // 执行渲染得到退出的状态
+  let exitStatus = shouldTimeSlice
+    ? renderRootConcurrent(root, lanes)
+    : renderRootSync(root, lanes);
+    // 如果渲染结束了，则进入提交阶段
+  if (exitStatus !== RootInProgress) {
+    const finishedWork = root.current.alternate;
+    root.finishedWork = finishedWork;
+    root.finishedLanes = lanes;
+    finishConcurrentRender(root, exitStatus, finishedWork, lanes)
+  }
+  ensureRootIsScheduled(root);
+  // 说明还有任务没有完成，返回工作循环下次调度时继续执行
+  return getContinuationForRoot(root, originalCallbackNode);
 }
 
-function renderRootSync(root) {
+function renderRootSync(root, lanes: Lanes) {
   prepareFreshStack(root, NoLane);
   workLoopSync();
 }
 
+function renderRootConcurrent(root, lanes: Lanes) {
+  // 在构建fiber树过程中，此方法会反复进入，但只有在第一次进来的时候会创建新的fiber树
+  if (workInProgressRoot !== root || workInProgressRootRenderLanes !== lanes) {
+    prepareFreshStack(root, lanes);
+  }
+  // 在当前分配的时间片（5ms）内执行fiber树的构建或者说渲染
+  workLoopConcurrent();
+  
+  // 如果workInProgress不为null，说明fiber树的构建还没有完成
+  if (workInProgress !== null) {
+    return RootInProgress;
+  }
+  // 如果workInProgress为null，说明渲染工作完全结束了
+  return workInProgressRootExitStatus;
+}
 function prepareFreshStack(root, lanes: Lanes): Fiber {
   root.finishedWork = null;
   root.finishedLanes = NoLanes;
@@ -477,7 +511,7 @@ function completeUnitOfWork(unitOfWork: Fiber): void {
   }
 }
 
-function finishConcurrentRender(root) {
+function finishConcurrentRender(root,exitStatus, finishedWork: Fiber, lanes: Lanes) {
   commitRoot(root)
 }
 
@@ -866,4 +900,10 @@ export function requestUpdateLane(fiber: Fiber): Lane {
 
 export function getWorkInProgressRootRenderLanes(): Lanes {
   return workInProgressRootRenderLanes;
+}
+
+export function isUnsafeClassRenderPhaseUpdate(fiber: Fiber): boolean {
+  // Check if this is a render phase update. Only called by class components,
+  // which special (deprecated) behavior for UNSAFE_componentWillReceive props.
+  return (executionContext & RenderContext) !== NoContext;
 }

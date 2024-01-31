@@ -190,3 +190,15 @@ export function enqueueConcurrentHookUpdate<S, A>(
   enqueueUpdate(fiber, concurrentQueue, concurrentUpdate, lane);
   return getRootForUpdatedFiber(fiber);
 }
+
+export function enqueueConcurrentClassUpdate<State>(
+  fiber: Fiber,
+  queue,
+  update,
+  lane: Lane,
+) {
+  const concurrentQueue: ConcurrentQueue = queue;
+  const concurrentUpdate: ConcurrentUpdate = update;
+  enqueueUpdate(fiber, concurrentQueue, concurrentUpdate, lane);
+  return getRootForUpdatedFiber(fiber);
+}
